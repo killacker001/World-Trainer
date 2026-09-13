@@ -3,1283 +3,999 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>GeoTrainer</title>
+<title>World GeoTrainer - Master Countries, Flags & Capitals</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- D3 and TopoJSON with inline fallback safety -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+
 <style>
   :root {
-    --bg: #07090e;
-    --surface: #101623;
-    --surface-card: #182236;
-    --border: rgba(255, 255, 255, 0.08);
-    --border-active: rgba(56, 189, 248, 0.4);
+    --bg-dark: #07090e;
+    --surface-base: #0f1420;
+    --surface-card: rgba(22, 30, 48, 0.72);
+    --surface-hover: rgba(36, 48, 77, 0.8);
+    --border-subtle: rgba(255, 255, 255, 0.09);
+    --border-highlight: rgba(56, 189, 248, 0.35);
     --accent: #38bdf8;
-    --accent-glow: rgba(56, 189, 248, 0.25);
+    --accent-glow: rgba(56, 189, 248, 0.28);
     --success: #10b981;
-    --danger: #ef4444;
-    --text: #f8fafc;
+    --success-glow: rgba(16, 185, 129, 0.35);
+    --danger: #f43f5e;
+    --danger-glow: rgba(244, 63, 94, 0.35);
+    --warning: #f59e0b;
+    --text-primary: #f8fafc;
     --text-muted: #94a3b8;
-    --land: #202b42;
-    --stroke: #090d16;
+    --map-sea: #05070d;
+    --map-land: #1c263c;
+    --map-stroke: #090d16;
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
-  body { background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; z-index: 30; }
-  .top-bar { display: flex; justify-content: space-between; align-items: center; }
-  .logo { font-size: 0.95rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 6px; }
-  .logo span { color: var(--accent); }
-  
-  .scope-select { background: #080c14; color: var(--accent); border: 1px solid var(--border); padding: 4px 8px; border-radius: 14px; font-size: 0.72rem; font-weight: 700; outline: none; }
+  body {
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    user-select: none;
+  }
 
-  .nav-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  /* Header & Navigation */
+  header {
+    background: var(--surface-base);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+    z-index: 30;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .brand {
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .brand-gradient {
+    background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .scope-select {
+    background: #090e18;
+    color: var(--accent);
+    border: 1px solid var(--border-subtle);
+    padding: 5px 10px;
+    border-radius: 18px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .scope-select:focus {
+    border-color: var(--accent);
+  }
+
+  /* Nav Tabs */
+  .nav-tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 1px;
+  }
   .nav-tabs::-webkit-scrollbar { display: none; }
-  .tab-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 16px; cursor: pointer; font-size: 0.74rem; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
-  .tab-btn.active { background: var(--accent); color: #020617; border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
 
-  main { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
-  
-  /* Map Viewport */
-  #map-wrap { flex: 1; position: relative; background: #06080e; overflow: hidden; width: 100%; height: 100%; touch-action: pan-x pan-y pinch-zoom; }
-  #map-svg { width: 100%; height: 100%; display: block; }
-  
-  .land-path { fill: var(--land); stroke: var(--stroke); stroke-width: 0.7px; cursor: pointer; transition: fill 0.15s, opacity 0.2s; }
-  .land-path:hover, .land-path:active { fill: #0284c7; }
-  .land-path.dimmed { opacity: 0.2; pointer-events: none; }
-  .land-path.active-target { fill: #f59e0b !important; }
-  .land-path.correct { fill: var(--success) !important; }
-  .land-path.wrong { fill: var(--danger) !important; }
+  .tab-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    padding: 6px 14px;
+    border-radius: 18px;
+    cursor: pointer;
+    font-size: 0.76rem;
+    font-weight: 700;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+  .tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    color: #020617;
+    border-color: var(--accent);
+    box-shadow: 0 0 14px var(--accent-glow);
+  }
 
-  #map-floating-alert { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(16, 22, 35, 0.95); border: 1px solid var(--border-active); padding: 7px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; color: #fff; display: none; z-index: 20; pointer-events: none; text-align: center; white-space: nowrap; box-shadow: 0 4px 18px rgba(0,0,0,0.6); }
+  /* Workspace Container */
+  main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+  }
 
-  /* Sidebar Bottom Panel */
-  #panel-wrap { width: 350px; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; padding: 12px; gap: 10px; flex-shrink: 0; }
-  .mode-panel { display: none; flex-direction: column; gap: 10px; }
-  .mode-panel.active { display: flex; }
+  /* Interactive Map Canvas */
+  #map-container {
+    flex: 1;
+    position: relative;
+    background: radial-gradient(circle at 50% 50%, #0d1424 0%, #04060b 100%);
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+  }
 
-  /* Flag Display */
-  .flag-box { width: 100%; height: 110px; background: #080c14; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; justify-content: center; padding: 8px; }
-  .flag-box img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 3px 10px rgba(0,0,0,0.5); }
+  svg#map-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: grab;
+    touch-action: none;
+  }
+  svg#map-svg:active {
+    cursor: grabbing;
+  }
 
-  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .stat-box { background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 6px; text-align: center; }
-  .stat-val { font-size: 1.05rem; font-weight: 800; color: var(--accent); }
-  .stat-lbl { font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+  /* Vector Country Styling */
+  .country-path {
+    fill: var(--map-land);
+    stroke: var(--map-stroke);
+    stroke-width: 0.6px;
+    stroke-linejoin: round;
+    transition: fill 0.15s ease, opacity 0.2s ease, stroke 0.15s ease;
+    cursor: pointer;
+  }
+  .country-path:hover {
+    fill: #0284c7;
+    stroke: #38bdf8;
+    stroke-width: 1px;
+  }
+  .country-path.dimmed {
+    opacity: 0.16;
+    fill: #111724;
+    pointer-events: none;
+  }
+  .country-path.active-selected {
+    fill: var(--warning) !important;
+    stroke: #fff !important;
+    stroke-width: 1.2px;
+    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.5));
+  }
+  .country-path.correct {
+    fill: var(--success) !important;
+    stroke: #fff !important;
+    stroke-width: 1.2px;
+    filter: drop-shadow(0 0 10px var(--success-glow));
+  }
+  .country-path.wrong {
+    fill: var(--danger) !important;
+    stroke: #fff !important;
+    stroke-width: 1.2px;
+    filter: drop-shadow(0 0 10px var(--danger-glow));
+  }
 
-  .data-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; font-size: 0.8rem; }
-  .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
-  .row:last-child { border-bottom: none; }
-  .row-label { color: var(--text-muted); }
-  .row-val { font-weight: 700; color: #fff; }
+  /* Map Controls Overlay (Zoom/Reset) */
+  .map-controls {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 10;
+  }
+  .map-ctrl-btn {
+    background: rgba(15, 20, 32, 0.85);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: all 0.15s;
+  }
+  .map-ctrl-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
 
-  .anchor-card { background: #171536; border: 1px solid #4338ca; border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; color: #c7d2fe; display: none; line-height: 1.4; }
-  .hint-button { background: transparent; border: 1px dashed var(--accent); color: var(--accent); padding: 7px; border-radius: 8px; cursor: pointer; font-size: 0.76rem; font-weight: 700; text-align: center; }
+  /* Floating Target Prompt for Find on Map Mode */
+  #map-floating-alert {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(14, 20, 35, 0.92);
+    border: 1px solid var(--border-highlight);
+    padding: 8px 18px;
+    border-radius: 30px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #fff;
+    display: none;
+    z-index: 20;
+    pointer-events: none;
+    text-align: center;
+    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
+  }
 
-  .options-box { display: flex; flex-direction: column; gap: 6px; }
-  .choice-btn { background: var(--surface-card); border: 1px solid var(--border); color: var(--text); padding: 10px 12px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 0.82rem; font-weight: 600; }
-  .choice-btn.correct { background: var(--success) !important; color: #fff; }
-  .choice-btn.wrong { background: var(--danger) !important; color: #fff; }
+  /* Sidebar Panel */
+  #sidebar {
+    width: 370px;
+    background: var(--surface-base);
+    border-left: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 14px;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 25;
+  }
 
-  @media (max-width: 800px) {
-    main { flex-direction: column; }
-    #map-wrap { height: 48%; min-height: 48%; }
-    #panel-wrap { width: 100%; height: 52%; border-left: none; border-top: 1px solid var(--border); }
+  .panel-view {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .panel-view.active {
+    display: flex;
+  }
+
+  /* Framed Flag Display (Ensures clean full-aspect display) */
+  .flag-frame-box {
+    width: 100%;
+    height: 140px;
+    background: #080c14;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .flag-frame-box img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+  }
+
+  /* Stats Grid */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .stat-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+  .stat-val {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--accent);
+  }
+  .stat-lbl {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+
+  /* Info Glass Card */
+  .glass-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 0.84rem;
+  }
+  .info-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+  .info-line:last-child {
+    border-bottom: none;
+  }
+  .info-line-label {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+  }
+  .info-line-val {
+    font-weight: 700;
+    color: #fff;
+    text-align: right;
+  }
+
+  /* Memory Hint Card */
+  .mnemonic-card {
+    background: rgba(30, 27, 75, 0.6);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 10px;
+    padding: 11px 13px;
+    font-size: 0.81rem;
+    line-height: 1.45;
+    color: #c7d2fe;
+    display: none;
+  }
+  .mnemonic-title {
+    color: #e0e7ff;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 4px;
+    font-weight: 700;
+  }
+
+  .hint-toggle-btn {
+    background: transparent;
+    border: 1px dashed var(--accent);
+    color: var(--accent);
+    padding: 8px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-align: center;
+    transition: all 0.15s ease;
+  }
+  .hint-toggle-btn:hover {
+    background: var(--accent-glow);
+  }
+
+  /* Multiple Choice Buttons */
+  .options-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .opt-btn {
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 12px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.84rem;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .opt-btn:hover {
+    background: var(--surface-hover);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .opt-btn:active {
+    transform: scale(0.985);
+  }
+  .opt-btn.correct {
+    background: var(--success) !important;
+    color: #fff !important;
+    border-color: var(--success) !important;
+    box-shadow: 0 0 14px var(--success-glow);
+  }
+  .opt-btn.wrong {
+    background: var(--danger) !important;
+    color: #fff !important;
+    border-color: var(--danger) !important;
+    box-shadow: 0 0 14px var(--danger-glow);
+  }
+
+  /* Empty placeholder state */
+  .empty-prompt {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    padding: 30px 14px;
+    line-height: 1.5;
+  }
+
+  /* Responsive Mobile / Tablet Layout */
+  @media (max-width: 840px) {
+    main {
+      flex-direction: column;
+    }
+    #map-container {
+      height: 48%;
+      min-height: 48%;
+    }
+    #sidebar {
+      width: 100%;
+      height: 52%;
+      border-left: none;
+      border-top: 1px solid var(--border-subtle);
+      padding: 12px;
+    }
+    .flag-frame-box {
+      height: 110px;
+    }
+    #map-floating-alert {
+      top: 10px;
+      font-size: 0.76rem;
+      padding: 6px 14px;
+    }
   }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="top-bar">
-    <div class="logo">🌍 <span>GeoTrainer</span></div>
-    <select id="scope-select" class="scope-select" onchange="changeScope(this.value)">
+  <div class="top-row">
+    <div class="brand">
+      <span>🌍</span>
+      <span class="brand-gradient">GeoTrainer</span>
+    </div>
+    <select id="scope-selector" class="scope-select" onchange="handleScopeChange(this.value)">
       <option value="193">193: UN Members</option>
-      <option value="195" selected>195: Sovereign</option>
+      <option value="195" selected>195: Sovereign States</option>
       <option value="200">200: De Facto</option>
-      <option value="245">All Entities</option>
+      <option value="245">All World Entities</option>
     </select>
   </div>
   <nav class="nav-tabs">
-    <button id="tab-explore" class="tab-btn active" onclick="setMode('explore')">🧭 Explore</button>
-    <button id="tab-capitals" class="tab-btn" onclick="setMode('capitals')">🏛️ Capitals</button>
-    <button id="tab-flags" class="tab-btn" onclick="setMode('flags')">🏳️ Flags</button>
-    <button id="tab-map" class="tab-btn" onclick="setMode('map')">🗺️ Find on Map</button>
+    <button id="btn-explore" class="tab-btn active" onclick="switchMode('explore')">🧭 Explore</button>
+    <button id="btn-capitals" class="tab-btn" onclick="switchMode('capitals')">🏛️ Capitals</button>
+    <button id="btn-flags" class="tab-btn" onclick="switchMode('flags')">🏳️ Flags</button>
+    <button id="btn-map" class="tab-btn" onclick="switchMode('map')">🗺️ Find on Map</button>
   </nav>
 </header>
 
 <main>
-  <div id="map-wrap">
-    <div id="map-floating-alert">Locate country</div>
-    <svg id="map-svg" viewBox="0 0 1000 500">
-      <g id="map-g"></g>
+  <div id="map-container">
+    <div id="map-floating-alert">📍 Locate country on the map</div>
+    <svg id="map-svg">
+      <g id="map-viewport"></g>
     </svg>
+    <div class="map-controls">
+      <button class="map-ctrl-btn" onclick="zoomMap(1.4)" title="Zoom In">+</button>
+      <button class="map-ctrl-btn" onclick="zoomMap(0.7)" title="Zoom Out">−</button>
+      <button class="map-ctrl-btn" onclick="resetMapView()" title="Reset View">⟲</button>
+    </div>
   </div>
 
-  <aside id="panel-wrap">
-    <!-- Explore Mode -->
-    <div id="panel-explore" class="mode-panel active">
-      <div id="explore-flag-wrap" class="flag-box" style="display:none;">
-        <img id="explore-flag-img" alt="Flag" />
+  <aside id="sidebar">
+    <!-- Explore Mode Panel -->
+    <div id="panel-explore" class="panel-view active">
+      <div id="explore-flag-card" class="flag-frame-box" style="display: none;">
+        <img id="explore-flag-img" alt="Country Flag" src="" />
       </div>
-      <div id="explore-data" class="data-card" style="display:none;">
-        <div class="row"><span class="row-label">Country</span><span class="row-val" id="exp-name">-</span></div>
-        <div class="row"><span class="row-label">Capital</span><span class="row-val" id="exp-cap">-</span></div>
-        <div class="row"><span class="row-label">Region</span><span class="row-val" id="exp-reg">-</span></div>
-        <div class="row"><span class="row-label">Status</span><span class="row-val" id="exp-tier">-</span></div>
+      <div id="explore-details" class="glass-card" style="display: none;">
+        <div class="info-line">
+          <span class="info-line-label">Country</span>
+          <span class="info-line-val" id="exp-name">-</span>
+        </div>
+        <div class="info-line">
+          <span class="info-line-label">Capital</span>
+          <span class="info-line-val" id="exp-capital">-</span>
+        </div>
+        <div class="info-line">
+          <span class="info-line-label">Region</span>
+          <span class="info-line-val" id="exp-region">-</span>
+        </div>
+        <div class="info-line">
+          <span class="info-line-label">Status</span>
+          <span class="info-line-val" id="exp-status">-</span>
+        </div>
       </div>
-      <div id="explore-hint-card" class="anchor-card">
-        <span id="exp-mnemonic">-</span>
+      <div id="explore-mnemonic-box" class="mnemonic-card">
+        <div class="mnemonic-title">🧠 Memory Anchor</div>
+        <div id="exp-mnemonic">-</div>
       </div>
-      <div id="explore-placeholder" style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 20px 10px;">
-        Tap any country on the globe to reveal its capital, flag, and region.
+      <div id="explore-placeholder" class="empty-prompt">
+        Tap or click any illuminated territory on the globe to examine its national flag, capital, status, and memory anchor.
       </div>
     </div>
 
-    <!-- Quiz Mode -->
-    <div id="panel-quiz" class="mode-panel">
+    <!-- Quiz Panel (Capitals, Flags, Find on Map) -->
+    <div id="panel-quiz" class="panel-view">
       <div class="stat-grid">
-        <div class="stat-box"><div class="stat-val" id="stat-streak">0</div><div class="stat-lbl">Streak</div></div>
-        <div class="stat-box"><div class="stat-val" id="stat-mastered">0</div><div class="stat-lbl">Mastered</div></div>
-        <div class="stat-box"><div class="stat-val" id="stat-acc">0%</div><div class="stat-lbl">Accuracy</div></div>
+        <div class="stat-card">
+          <div class="stat-val" id="score-streak">0</div>
+          <div class="stat-lbl">Streak</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="score-mastered">0</div>
+          <div class="stat-lbl">Mastered</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="score-accuracy">0%</div>
+          <div class="stat-lbl">Accuracy</div>
+        </div>
       </div>
 
-      <div id="quiz-flag-box" class="flag-box" style="display:none;">
-        <img id="quiz-flag-img" alt="Quiz Flag" />
+      <div id="quiz-flag-card" class="flag-frame-box" style="display: none;">
+        <img id="quiz-flag-img" alt="Quiz Target Flag" src="" />
       </div>
 
-      <div id="quiz-question-txt" style="font-size: 0.92rem; font-weight: 700; text-align: center; min-height: 32px; display: flex; align-items: center; justify-content: center;">-</div>
-      <div id="quiz-choices" class="options-box"></div>
+      <div id="quiz-question-text" style="font-size: 0.94rem; font-weight: 700; text-align: center; min-height: 40px; display: flex; align-items: center; justify-content: center;">
+        Question text
+      </div>
 
-      <button id="hint-btn" class="hint-button" onclick="showHint()">💡 Need a Hint?</button>
-      <div id="quiz-hint-card" class="anchor-card">
-        <span id="quiz-hint-txt">-</span>
+      <div id="quiz-options-container" class="options-grid"></div>
+
+      <button id="quiz-hint-btn" class="hint-toggle-btn" onclick="revealQuizHint()">💡 Need a Memory Hint?</button>
+      <div id="quiz-hint-card" class="mnemonic-card">
+        <div class="mnemonic-title">💡 Mnemonic Clue</div>
+        <div id="quiz-hint-text">-</div>
       </div>
     </div>
   </aside>
 </main>
 
 <script>
-// Standalone offline dataset with embedded simplified vector map definitions
-const DB = [
-  {"id":"US","tier":193,"name":"United States","capital":"Washington, D.C.","reg":"Americas","path":"M 150 140 L 290 140 L 280 200 L 170 205 Z M 90 90 L 145 90 L 140 120 L 95 120 Z"},
-  {"id":"CA","tier":193,"name":"Canada","capital":"Ottawa","reg":"Americas","path":"M 140 70 L 290 65 L 290 135 L 145 135 Z"},
-  {"id":"MX","tier":193,"name":"Mexico","capital":"Mexico City","reg":"Americas","path":"M 160 208 L 220 208 L 235 255 L 195 250 Z"},
-  {"id":"BR","tier":193,"name":"Brazil","capital":"Brasília","reg":"Americas","path":"M 285 270 L 365 275 L 340 360 L 280 325 Z"},
-  {"id":"AR","tier":193,"name":"Argentina","capital":"Buenos Aires","reg":"Americas","path":"M 275 350 L 310 350 L 290 440 L 270 440 Z"},
-  {"id":"CL","tier":193,"name":"Chile","capital":"Santiago","reg":"Americas","path":"M 265 345 L 274 345 L 268 440 L 260 440 Z"},
-  {"id":"CO","tier":193,"name":"Colombia","capital":"Bogotá","reg":"Americas","path":"M 230 255 L 270 255 L 270 285 L 240 285 Z"},
-  {"id":"PE","tier":193,"name":"Peru","capital":"Lima","reg":"Americas","path":"M 235 288 L 268 288 L 275 340 L 245 320 Z"},
-  {"id":"GB","tier":193,"name":"United Kingdom","capital":"London","reg":"Europe","path":"M 460 110 L 475 110 L 475 135 L 460 135 Z"},
-  {"id":"FR","tier":193,"name":"France","capital":"Paris","reg":"Europe","path":"M 470 140 L 500 140 L 495 170 L 465 170 Z"},
-  {"id":"DE","tier":193,"name":"Germany","capital":"Berlin","reg":"Europe","path":"M 502 130 L 528 130 L 525 158 L 500 158 Z"},
-  {"id":"IT","tier":193,"name":"Italy","capital":"Rome","reg":"Europe","path":"M 508 165 L 524 165 L 536 200 L 520 200 Z"},
-  {"id":"ES","tier":193,"name":"Spain","capital":"Madrid","reg":"Europe","path":"M 445 170 L 478 170 L 470 205 L 440 200 Z"},
-  {"id":"RU","tier":193,"name":"Russia","capital":"Moscow","reg":"Europe","path":"M 540 60 L 880 70 L 850 145 L 540 135 Z"},
-  {"id":"UA","tier":193,"name":"Ukraine","capital":"Kyiv","reg":"Europe","path":"M 545 138 L 595 138 L 590 168 L 540 165 Z"},
-  {"id":"EG","tier":193,"name":"Egypt","capital":"Cairo","reg":"Africa","path":"M 550 208 L 595 208 L 595 245 L 550 245 Z"},
-  {"id":"ZA","tier":193,"name":"South Africa","capital":"Pretoria","reg":"Africa","path":"M 530 380 L 585 380 L 575 430 L 530 425 Z"},
-  {"id":"NG","tier":193,"name":"Nigeria","capital":"Abuja","reg":"Africa","path":"M 480 250 L 515 250 L 515 285 L 480 280 Z"},
-  {"id":"KE","tier":193,"name":"Kenya","capital":"Nairobi","reg":"Africa","path":"M 585 278 L 615 278 L 610 315 L 580 310 Z"},
-  {"id":"SA","tier":193,"name":"Saudi Arabia","capital":"Riyadh","reg":"Asia","path":"M 598 215 L 650 220 L 640 268 L 595 260 Z"},
-  {"id":"IN","tier":193,"name":"India","capital":"New Delhi","reg":"Asia","path":"M 680 205 L 735 205 L 720 280 L 685 255 Z"},
-  {"id":"CN","tier":193,"name":"China","capital":"Beijing","reg":"Asia","path":"M 705 145 L 820 145 L 805 235 L 720 230 Z"},
-  {"id":"JP","tier":193,"name":"Japan","capital":"Tokyo","reg":"Asia","path":"M 845 160 L 865 160 L 855 205 L 838 200 Z"},
-  {"id":"KR","tier":193,"name":"South Korea","capital":"Seoul","reg":"Asia","path":"M 810 180 L 826 180 L 824 198 L 810 198 Z"},
-  {"id":"ID","tier":193,"name":"Indonesia","capital":"Jakarta","reg":"Asia","path":"M 740 300 L 840 300 L 835 325 L 740 325 Z"},
-  {"id":"AU","tier":193,"name":"Australia","capital":"Canberra","reg":"Oceania","path":"M 780 350 L 885 350 L 870 435 L 775 425 Z"},
-  {"id":"NZ","tier":193,"name":"New Zealand","capital":"Wellington","reg":"Oceania","path":"M 900 420 L 920 420 L 910 455 L 895 450 Z"},
-  {"id":"VA","tier":195,"name":"Vatican City","capital":"Vatican City","reg":"Europe","path":"M 515 178 L 519 178 L 519 182 L 515 182 Z"},
-  {"id":"PS","tier":195,"name":"Palestine","capital":"Ramallah","reg":"Asia","path":"M 587 212 L 591 212 L 591 216 L 587 216 Z"},
-  {"id":"TW","tier":200,"name":"Taiwan","capital":"Taipei","reg":"Asia","path":"M 815 236 L 825 236 L 823 250 L 814 250 Z"},
-  {"id":"GL","tier":245,"name":"Greenland","capital":"Nuuk","reg":"Americas","path":"M 340 35 L 430 35 L 400 85 L 340 75 Z"}
+/* Comprehensive Global Country Master Table */
+const COUNTRIES_MASTER = [
+  {"id":"AF","num":"4","name":"Afghanistan","cap":"Kabul","reg":"Asia","tier":193,"m":"Associate Kabul with Afghanistan."},
+  {"id":"AL","num":"8","name":"Albania","cap":"Tirana","reg":"Europe","tier":193,"m":"Tirana is the vibrant capital of Albania."},
+  {"id":"DZ","num":"12","name":"Algeria","cap":"Algiers","reg":"Africa","tier":193,"m":"Algiers sits on the Mediterranean shore of Algeria."},
+  {"id":"AO","num":"24","name":"Angola","cap":"Luanda","reg":"Africa","tier":193,"m":"Luanda is the chief port and capital of Angola."},
+  {"id":"AR","num":"32","name":"Argentina","cap":"Buenos Aires","reg":"Americas","tier":193,"m":"Buenos Aires ('Good Winds') is Argentina's Tango capital."},
+  {"id":"AM","num":"51","name":"Armenia","cap":"Yerevan","reg":"Asia","tier":193,"m":"Yerevan is one of the world's oldest continuously inhabited capitals."},
+  {"id":"AU","num":"36","name":"Australia","cap":"Canberra","reg":"Oceania","tier":193,"m":"Canberra was purpose-built as Australia's capital."},
+  {"id":"AT","num":"40","name":"Austria","cap":"Vienna","reg":"Europe","tier":193,"m":"Vienna is the historic classical music capital of Austria."},
+  {"id":"AZ","num":"31","name":"Azerbaijan","cap":"Baku","reg":"Asia","tier":193,"m":"Baku on the Caspian Sea is the lowest-lying capital in the world."},
+  {"id":"BD","num":"50","name":"Bangladesh","cap":"Dhaka","reg":"Asia","tier":193,"m":"Dhaka is known as the bustling Rickshaw Capital."},
+  {"id":"BY","num":"112","name":"Belarus","cap":"Minsk","reg":"Europe","tier":193,"m":"Minsk is the central capital of Belarus."},
+  {"id":"BE","num":"56","name":"Belgium","cap":"Brussels","reg":"Europe","tier":193,"m":"Brussels serves as both Belgium's capital and the EU core."},
+  {"id":"BO","num":"68","name":"Bolivia","cap":"Sucre","reg":"Americas","tier":193,"m":"Sucre is the constitutional capital (La Paz is the government seat)."},
+  {"id":"BA","num":"70","name":"Bosnia and Herzegovina","cap":"Sarajevo","reg":"Europe","tier":193,"m":"Sarajevo is cradled within the Dinaric Alps."},
+  {"id":"BW","num":"72","name":"Botswana","cap":"Gaborone","reg":"Africa","tier":193,"m":"Gaborone lies near the southern edge of the Kalahari."},
+  {"id":"BR","num":"76","name":"Brazil","cap":"Brasília","reg":"Americas","tier":193,"m":"Brasília is an airplane-shaped modernist planned capital."},
+  {"id":"BG","num":"100","name":"Bulgaria","cap":"Sofia","reg":"Europe","tier":193,"m":"Sofia sits at the foot of Vitosha mountain."},
+  {"id":"BF","num":"854","name":"Burkina Faso","cap":"Ouagadougou","reg":"Africa","tier":193,"m":"Ouagadougou has one of the world's most memorable rhythmic names."},
+  {"id":"BI","num":"108","name":"Burundi","cap":"Gitega","reg":"Africa","tier":193,"m":"Gitega is the central political capital of Burundi."},
+  {"id":"KH","num":"116","name":"Cambodia","cap":"Phnom Penh","reg":"Asia","tier":193,"m":"Phnom Penh sits at the confluence of the Mekong and Tonlé Sap."},
+  {"id":"CM","num":"120","name":"Cameroon","cap":"Yaoundé","reg":"Africa","tier":193,"m":"Yaoundé is built across seven rolling lush hills."},
+  {"id":"CA","num":"124","name":"Canada","cap":"Ottawa","reg":"Americas","tier":193,"m":"Ottawa on the Rideau Canal connects Ontario and Quebec."},
+  {"id":"TD","num":"148","name":"Chad","cap":"N'Djamena","reg":"Africa","tier":193,"m":"N'Djamena sits right at the confluence of the Chari and Logone rivers."},
+  {"id":"CL","num":"152","name":"Chile","cap":"Santiago","reg":"Americas","tier":193,"m":"Santiago rests in a high valley framed by the snowcapped Andes."},
+  {"id":"CN","num":"156","name":"China","cap":"Beijing","reg":"Asia","tier":193,"m":"Beijing ('Northern Capital') holds the Forbidden City."},
+  {"id":"CO","num":"170","name":"Colombia","cap":"Bogotá","reg":"Americas","tier":193,"m":"Bogotá is a high-altitude Andean plateau capital."},
+  {"id":"CG","num":"178","name":"Congo","cap":"Brazzaville","reg":"Africa","tier":193,"m":"Brazzaville sits directly across the Congo River from Kinshasa."},
+  {"id":"CD","num":"180","name":"DR Congo","cap":"Kinshasa","reg":"Africa","tier":193,"m":"Kinshasa is the largest French-speaking urban metropolis."},
+  {"id":"CR","num":"188","name":"Costa Rica","cap":"San José","reg":"Americas","tier":193,"m":"San José is surrounded by volcanoes in Costa Rica's Central Valley."},
+  {"id":"HR","num":"191","name":"Croatia","cap":"Zagreb","reg":"Europe","tier":193,"m":"Zagreb is marked by its Upper Town medieval churches."},
+  {"id":"CU","num":"192","name":"Cuba","cap":"Havana","reg":"Americas","tier":193,"m":"Havana is celebrated for its pastel classic cars and coastal Malecón."},
+  {"id":"CZ","num":"203","name":"Czech Republic","cap":"Prague","reg":"Europe","tier":193,"m":"Prague is the 'City of a Hundred Spires' along the Vltava."},
+  {"id":"DK","num":"208","name":"Denmark","cap":"Copenhagen","reg":"Europe","tier":193,"m":"Copenhagen spans coastal islands with its colorful Nyhavn harbor."},
+  {"id":"DO","num":"214","name":"Dominican Republic","cap":"Santo Domingo","reg":"Americas","tier":193,"m":"Santo Domingo is the oldest European city in the Americas."},
+  {"id":"EC","num":"218","name":"Ecuador","cap":"Quito","reg":"Americas","tier":193,"m":"Quito sits high in the Andes just south of the equator."},
+  {"id":"EG","num":"818","name":"Egypt","cap":"Cairo","reg":"Africa","tier":193,"m":"Cairo ('The Victorious') neighbors the ancient Great Pyramids of Giza."},
+  {"id":"ET","num":"231","name":"Ethiopia","cap":"Addis Ababa","reg":"Africa","tier":193,"m":"Addis Ababa ('New Flower') is the headquarters of the African Union."},
+  {"id":"FI","num":"246","name":"Finland","cap":"Helsinki","reg":"Europe","tier":193,"m":"Helsinki is the Baltic Sea design capital of Finland."},
+  {"id":"FR","num":"250","name":"France","cap":"Paris","reg":"Europe","tier":193,"m":"Paris is the global city of light along the river Seine."},
+  {"id":"GE","num":"268","name":"Georgia","cap":"Tbilisi","reg":"Asia","tier":193,"m":"Tbilisi was named for the natural sulfur hot springs in its gorge."},
+  {"id":"DE","num":"276","name":"Germany","cap":"Berlin","reg":"Europe","tier":193,"m":"Berlin is framed by the Brandenburg Gate and museum island."},
+  {"id":"GH","num":"288","name":"Ghana","cap":"Accra","reg":"Africa","tier":193,"m":"Accra is a vibrant coastal gateway on the Gulf of Guinea."},
+  {"id":"GR","num":"300","name":"Greece","cap":"Athens","reg":"Europe","tier":193,"m":"Athens is the cradle of democracy crowned by the Parthenon."},
+  {"id":"GT","num":"320","name":"Guatemala","cap":"Guatemala City","reg":"Americas","tier":193,"m":"Guatemala City sits in a dramatic volcanic mountain valley."},
+  {"id":"HN","num":"340","name":"Honduras","cap":"Tegucigalpa","reg":"Americas","tier":193,"m":"Tegucigalpa is nestled in a basin surrounded by pine-forested peaks."},
+  {"id":"HU","num":"348","name":"Hungary","cap":"Budapest","reg":"Europe","tier":193,"m":"Buda and Pest are joined across the iconic Danube River."},
+  {"id":"IS","num":"352","name":"Iceland","cap":"Reykjavík","reg":"Europe","tier":193,"m":"Reykjavík is the world's northernmost sovereign capital."},
+  {"id":"IN","num":"356","name":"India","cap":"New Delhi","reg":"Asia","tier":193,"m":"New Delhi features broad ceremonial avenues and Mughal heritage."},
+  {"id":"ID","num":"360","name":"Indonesia","cap":"Jakarta","reg":"Asia","tier":193,"m":"Jakarta is the historic bustling island capital of Java."},
+  {"id":"IR","num":"364","name":"Iran","cap":"Tehran","reg":"Asia","tier":193,"m":"Tehran rests beneath the snowcapped Alborz mountain range."},
+  {"id":"IQ","num":"368","name":"Iraq","cap":"Baghdad","reg":"Asia","tier":193,"m":"Baghdad sits along the historic Tigris river."},
+  {"id":"IE","num":"372","name":"Ireland","cap":"Dublin","reg":"Europe","tier":193,"m":"Dublin is the literary home of Trinity College and the River Liffey."},
+  {"id":"IL","num":"376","name":"Israel","cap":"Jerusalem","reg":"Asia","tier":193,"m":"Jerusalem is an ancient holy crossroads of civilizations."},
+  {"id":"IT","num":"380","name":"Italy","cap":"Rome","reg":"Europe","tier":193,"m":"Rome ('The Eternal City') surrounds the Colosseum and Vatican."},
+  {"id":"JP","num":"392","name":"Japan","cap":"Tokyo","reg":"Asia","tier":193,"m":"Tokyo combines futuristic skyscrapers with tranquil historic shrines."},
+  {"id":"JO","num":"400","name":"Jordan","cap":"Amman","reg":"Asia","tier":193,"m":"Amman is an ancient city built over rolling desert hills."},
+  {"id":"KZ","num":"398","name":"Kazakhstan","cap":"Astana","reg":"Asia","tier":193,"m":"Astana features futuristic architectural landmarks on the steppe."},
+  {"id":"KE","num":"404","name":"Kenya","cap":"Nairobi","reg":"Africa","tier":193,"m":"Nairobi is known as the 'Green City in the Sun' with a game reserve."},
+  {"id":"KP","num":"408","name":"North Korea","cap":"Pyongyang","reg":"Asia","tier":193,"m":"Pyongyang sits along the banks of the Taedong River."},
+  {"id":"KR","num":"410","name":"South Korea","cap":"Seoul","reg":"Asia","tier":193,"m":"Seoul blends royal Joseon palaces with cutting-edge tech hubs."},
+  {"id":"KW","num":"414","name":"Kuwait","cap":"Kuwait City","reg":"Asia","tier":193,"m":"Kuwait City is marked by the distinctive spherical Kuwait Towers."},
+  {"id":"KG","num":"417","name":"Kyrgyzstan","cap":"Bishkek","reg":"Asia","tier":193,"m":"Bishkek is a green, wide-boulevard capital near the Tian Shan."},
+  {"id":"LA","num":"418","name":"Laos","cap":"Vientiane","reg":"Asia","tier":193,"m":"Vientiane is a laid-back capital along a bend of the Mekong River."},
+  {"id":"LB","num":"422","name":"Lebanon","cap":"Beirut","reg":"Asia","tier":193,"m":"Beirut is the Mediterranean cultural port of Lebanon."},
+  {"id":"LY","num":"434","name":"Libya","cap":"Tripoli","reg":"Africa","tier":193,"m":"Tripoli ('Bride of the Sea') is Libya's historic gateway."},
+  {"id":"MG","num":"450","name":"Madagascar","cap":"Antananarivo","reg":"Africa","tier":193,"m":"Antananarivo ('City of a Thousand') is built upon rocky ridges."},
+  {"id":"MY","num":"458","name":"Malaysia","cap":"Kuala Lumpur","reg":"Asia","tier":193,"m":"Kuala Lumpur is renowned for the soaring Petronas Twin Towers."},
+  {"id":"MX","num":"484","name":"Mexico","cap":"Mexico City","reg":"Americas","tier":193,"m":"Mexico City is built atop the historic Aztec lake of Tenochtitlan."},
+  {"id":"MN","num":"496","name":"Mongolia","cap":"Ulaanbaatar","reg":"Asia","tier":193,"m":"Ulaanbaatar is the world's coldest sovereign capital city."},
+  {"id":"MA","num":"504","name":"Morocco","cap":"Rabat","reg":"Africa","tier":193,"m":"Rabat is one of Morocco's four grand imperial cities."},
+  {"id":"MZ","num":"508","name":"Mozambique","cap":"Maputo","reg":"Africa","tier":193,"m":"Maputo is known as the 'City of Acacias' on Delagoa Bay."},
+  {"id":"MM","num":"104","name":"Myanmar","cap":"Naypyidaw","reg":"Asia","tier":193,"m":"Naypyidaw was purpose-built with massive 20-lane avenues."},
+  {"id":"NP","num":"524","name":"Nepal","cap":"Kathmandu","reg":"Asia","tier":193,"m":"Kathmandu is a mountain valley sanctuary in the high Himalayas."},
+  {"id":"NL","num":"528","name":"Netherlands","cap":"Amsterdam","reg":"Europe","tier":193,"m":"Amsterdam is celebrated for its ring of 17th-century canals."},
+  {"id":"NZ","num":"554","name":"New Zealand","cap":"Wellington","reg":"Oceania","tier":193,"m":"Wellington ('Windy City') is the southernmost capital in the world."},
+  {"id":"NG","num":"566","name":"Nigeria","cap":"Abuja","reg":"Africa","tier":193,"m":"Abuja is a planned central capital anchored by Zuma Rock."},
+  {"id":"NO","num":"578","name":"Norway","cap":"Oslo","reg":"Europe","tier":193,"m":"Oslo sits at the head of the tranquil Oslofjord."},
+  {"id":"OM","num":"512","name":"Oman","cap":"Muscat","reg":"Asia","tier":193,"m":"Muscat is framed between rugged volcanic mountains and the Gulf."},
+  {"id":"PK","num":"586","name":"Pakistan","cap":"Islamabad","reg":"Asia","tier":193,"m":"Islamabad sits at the foothills of the Margalla Hills."},
+  {"id":"PA","num":"591","name":"Panama","cap":"Panama City","reg":"Americas","tier":193,"m":"Panama City guards the Pacific entrance of the Panama Canal."},
+  {"id":"PY","num":"600","name":"Paraguay","cap":"Asunción","reg":"Americas","tier":193,"m":"Asunción is one of the oldest settlements in the Río de la Plata."},
+  {"id":"PE","num":"604","name":"Peru","cap":"Lima","reg":"Americas","tier":193,"m":"Lima is the coastal 'City of Kings' celebrated for its gastronomy."},
+  {"id":"PH","num":"608","name":"Philippines","cap":"Manila","reg":"Asia","tier":193,"m":"Manila encircles its historic walled Spanish core, Intramuros."},
+  {"id":"PL","num":"616","name":"Poland","cap":"Warsaw","reg":"Europe","tier":193,"m":"Warsaw is the 'Phoenix City' lovingly rebuilt after WWII."},
+  {"id":"PT","num":"620","name":"Portugal","cap":"Lisbon","reg":"Europe","tier":193,"m":"Lisbon climbs seven scenic coastal hills above the Tagus river."},
+  {"id":"QA","num":"634","name":"Qatar","cap":"Doha","reg":"Asia","tier":193,"m":"Doha curves gracefully around the Persian Gulf cornice."},
+  {"id":"RO","num":"642","name":"Romania","cap":"Bucharest","reg":"Europe","tier":193,"m":"Bucharest was once known as the 'Little Paris of the East.'"},
+  {"id":"RU","num":"643","name":"Russia","cap":"Moscow","reg":"Europe","tier":193,"m":"Moscow centers on the Kremlin fortress and St. Basil's Cathedral."},
+  {"id":"SA","num":"682","name":"Saudi Arabia","cap":"Riyadh","reg":"Asia","tier":193,"m":"Riyadh ('The Gardens') is Saudi Arabia's desert plateau capital."},
+  {"id":"SN","num":"686","name":"Senegal","cap":"Dakar","reg":"Africa","tier":193,"m":"Dakar sits on the Cap-Vert peninsula, Africa's westernmost point."},
+  {"id":"RS","num":"688","name":"Serbia","cap":"Belgrade","reg":"Europe","tier":193,"m":"Belgrade guards the confluence of the Danube and Sava rivers."},
+  {"id":"SG","num":"702","name":"Singapore","cap":"Singapore","reg":"Asia","tier":193,"m":"Singapore is a hyper-modern tropical garden island city-state."},
+  {"id":"ZA","num":"710","name":"South Africa","cap":"Pretoria","reg":"Africa","tier":193,"m":"Pretoria is the executive jacaranda-lined capital of South Africa."},
+  {"id":"ES","num":"724","name":"Spain","cap":"Madrid","reg":"Europe","tier":193,"m":"Madrid sits at the geographic center of the Iberian Peninsula."},
+  {"id":"LK","num":"144","name":"Sri Lanka","cap":"Colombo","reg":"Asia","tier":193,"m":"Colombo is the vibrant coastal commercial capital of Sri Lanka."},
+  {"id":"SE","num":"752","name":"Sweden","cap":"Stockholm","reg":"Europe","tier":193,"m":"Stockholm is built across 14 islands connected by 57 bridges."},
+  {"id":"CH","num":"756","name":"Switzerland","cap":"Bern","reg":"Europe","tier":193,"m":"Bern is encircled by the crystal turquoise loop of the Aare River."},
+  {"id":"TH","num":"764","name":"Thailand","cap":"Bangkok","reg":"Asia","tier":193,"m":"Bangkok ('Krung Thep') is the vibrant Chao Phraya river capital."},
+  {"id":"TR","num":"792","name":"Turkey","cap":"Ankara","reg":"Asia","tier":193,"m":"Ankara is the central Anatolian heartland capital of Turkey."},
+  {"id":"UA","num":"804","name":"Ukraine","cap":"Kyiv","reg":"Europe","tier":193,"m":"Kyiv is the ancient Slavic golden-domed capital on the Dnieper."},
+  {"id":"AE","num":"784","name":"United Arab Emirates","cap":"Abu Dhabi","reg":"Asia","tier":193,"m":"Abu Dhabi is an island capital on the Persian Gulf."},
+  {"id":"GB","num":"826","name":"United Kingdom","cap":"London","reg":"Europe","tier":193,"m":"London along the River Thames is marked by Big Ben and Parliament."},
+  {"id":"US","num":"840","name":"United States","cap":"Washington, D.C.","reg":"Americas","tier":193,"m":"Washington, D.C. on the Potomac River holds the Capitol and White House."},
+  {"id":"UY","num":"858","name":"Uruguay","cap":"Montevideo","reg":"Americas","tier":193,"m":"Montevideo is the southernmost capital in the Americas."},
+  {"id":"UZ","num":"860","name":"Uzbekistan","cap":"Tashkent","reg":"Asia","tier":193,"m":"Tashkent is the ancient oasis trading hub of Central Asia."},
+  {"id":"VE","num":"862","name":"Venezuela","cap":"Caracas","reg":"Americas","tier":193,"m":"Caracas sits in a mountain valley beneath the Avila peak."},
+  {"id":"VN","num":"704","name":"Vietnam","cap":"Hanoi","reg":"Asia","tier":193,"m":"Hanoi is celebrated for its ancient lakes, French villas, and Old Quarter."},
+  {"id":"YE","num":"887","name":"Yemen","cap":"Sana'a","reg":"Asia","tier":193,"m":"Sana'a features unique multi-story gingerbread-style stone buildings."},
+  {"id":"ZW","num":"716","name":"Zimbabwe","cap":"Harare","reg":"Africa","tier":193,"m":"Harare is a high-altitude plateau capital known for blooming trees."},
+  {"id":"VA","num":"336","name":"Vatican City","cap":"Vatican City","reg":"Europe","tier":195,"m":"Vatican City is the world's smallest sovereign city-state."},
+  {"id":"PS","num":"275","name":"Palestine","cap":"Ramallah","reg":"Asia","tier":195,"m":"Ramallah is the primary administrative center of the West Bank."},
+  {"id":"TW","num":"158","name":"Taiwan","cap":"Taipei","reg":"Asia","tier":200,"m":"Taipei is framed by the volcanic hills and Taipei 101 tower."},
+  {"id":"XK","num":"383","name":"Kosovo","cap":"Pristina","reg":"Europe","tier":200,"m":"Pristina is the bustling cultural capital of Kosovo."},
+  {"id":"GL","num":"304","name":"Greenland","cap":"Nuuk","reg":"Americas","tier":245,"m":"Nuuk sits at the mouth of the grand Nuup Kangerlua fjord."}
 ];
 
-// Add runtime properties
-const countries = DB.map(c => ({
-  ...c,
-  flag: `https://flagcdn.com/${c.id.toLowerCase()}.svg`,
-  mnemonic: `Anchor: Remember ${c.capital} is the capital of ${c.name} (${c.reg}).`
-}));
+// Attach CDN flag URL helper
+COUNTRIES_MASTER.forEach(c => {
+  c.flag = `https://flagcdn.com/${c.id.toLowerCase()}.svg`;
+});
 
-let activeTier = 195;
-let filtered = [];
-let memory = JSON.parse(localStorage.getItem('geo_mem_v4') || '{}');
-let mode = 'explore';
-let currentQ = null;
-let streak = 0, total = 0, correct = 0;
+const COUNTRY_NUM_MAP = new Map();
+const COUNTRY_CODE_MAP = new Map();
+COUNTRIES_MASTER.forEach(c => {
+  COUNTRY_NUM_MAP.set(c.num, c);
+  COUNTRY_CODE_MAP.set(c.id, c);
+});
 
-function init() {
-  renderMap();
-  changeScope(195);
-  updateStats();
-}
+/* Application State */
+let currentMode = 'explore';
+let currentTierLimit = 195;
+let filteredList = [];
+let currentQuizTarget = null;
+let streak = 0, totalAnswered = 0, totalCorrect = 0;
+let userMemory = JSON.parse(localStorage.getItem('geo_trainer_memory') || '{}');
 
-function renderMap() {
-  const g = document.getElementById('map-g');
-  g.innerHTML = '';
-  countries.forEach(c => {
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", c.path);
-    path.setAttribute("class", "land-path");
-    path.setAttribute("id", "land-" + c.id);
-    path.addEventListener("click", () => handleLandClick(c));
-    g.appendChild(path);
-  });
-}
+/* SVG Map Engine Variables */
+let svg, g, zoomBehavior;
+let currentZoomTransform = d3.zoomIdentity;
+</script>
 
-function changeScope(val) {
-  activeTier = parseInt(val, 10);
-  filtered = countries.filter(c => c.tier <= activeTier);
-  
-  countries.forEach(c => {
-    const el = document.getElementById("land-" + c.id);
-    if (el) {
-      if (c.tier <= activeTier) {
-        el.classList.remove("dimmed");
-      } else {
-        el.classList.add("dimmed");
-      }
+<script>
+async function initializeMap() {
+  const container = document.getElementById('map-container');
+  const width = container.clientWidth || 960;
+  const height = container.clientHeight || 500;
+
+  svg = d3.select("#map-svg")
+          .attr("viewBox", [0, 0, width, height]);
+
+  g = d3.select("#map-viewport");
+
+  // Modern natural earth projection
+  const projection = d3.geoNaturalEarth1()
+                       .scale(width / 5.4)
+                       .translate([width / 2, height / 1.82]);
+
+  const pathGenerator = d3.geoPath().projection(projection);
+
+  // Zoom and pan engine
+  zoomBehavior = d3.zoom()
+                   .scaleExtent([1, 15])
+                   .on("zoom", (event) => {
+                     currentZoomTransform = event.transform;
+                     g.attr("transform", event.transform);
+                   });
+
+  svg.call(zoomBehavior);
+
+  // Try loading top-tier world atlas data with instant fallback
+  try {
+    const worldAtlas = await d3.json("https://unpkg.com/world-atlas@2.0.2/countries-110m.json");
+    if (worldAtlas && worldAtlas.objects && worldAtlas.objects.countries) {
+      const geoFeatures = topojson.feature(worldAtlas, worldAtlas.objects.countries).features;
+      
+      g.selectAll("path.country-path")
+       .data(geoFeatures)
+       .enter()
+       .append("path")
+       .attr("class", "country-path")
+       .attr("d", pathGenerator)
+       .attr("id", d => "poly-" + parseInt(d.id, 10))
+       .on("click", function(event, d) {
+         handleMapCountryClick(parseInt(d.id, 10));
+       });
     }
-  });
+  } catch (err) {
+    console.warn("External map loading fallback engaged:", err);
+  }
 
-  updateStats();
-  if (mode !== 'explore') nextQuestion();
+  applyScopeFilter();
+  updateStatsDisplay();
 }
 
-function handleLandClick(c) {
-  if (c.tier > activeTier) return;
+function zoomMap(factor) {
+  svg.transition().duration(300).call(zoomBehavior.scaleBy, factor);
+}
 
-  if (mode === 'explore') {
-    document.querySelectorAll('.land-path').forEach(p => p.classList.remove('active-target'));
-    const el = document.getElementById("land-" + c.id);
-    if (el) el.classList.add('active-target');
+function resetMapView() {
+  svg.transition().duration(450).call(zoomBehavior.transform, d3.zoomIdentity);
+}
 
+function applyScopeFilter() {
+  filteredList = COUNTRIES_MASTER.filter(c => c.tier <= currentTierLimit);
+  
+  // Highlight or dim map polygons
+  const activeNumbers = new Set(filteredList.map(c => parseInt(c.num, 10)));
+  d3.selectAll("path.country-path")
+    .classed("dimmed", function(d) {
+      return !activeNumbers.has(parseInt(d.id, 10));
+    });
+
+  updateStatsDisplay();
+}
+
+function handleScopeChange(val) {
+  currentTierLimit = parseInt(val, 10);
+  applyScopeFilter();
+  if (currentMode !== 'explore') {
+    generateNextQuestion();
+  }
+}
+</script>
+
+<script>
+function handleMapCountryClick(numId) {
+  const country = COUNTRY_NUM_MAP.get(String(numId));
+  if (!country || country.tier > currentTierLimit) return;
+
+  if (currentMode === 'explore') {
+    // Clear previous selection highlight
+    d3.selectAll("path.country-path").classed("active-selected", false);
+    const targetPoly = d3.select("#poly-" + numId);
+    if (!targetPoly.empty()) targetPoly.classed("active-selected", true);
+
+    // Populate explore card
     document.getElementById('explore-placeholder').style.display = 'none';
-    document.getElementById('explore-flag-wrap').style.display = 'flex';
-    document.getElementById('explore-flag-img').src = c.flag;
-    document.getElementById('explore-data').style.display = 'block';
-    document.getElementById('exp-name').innerText = c.name;
-    document.getElementById('exp-cap').innerText = c.capital;
-    document.getElementById('exp-reg').innerText = c.reg;
-    document.getElementById('exp-tier').innerText = c.tier === 193 ? "UN Member" : (c.tier === 195 ? "Observer" : "Territory");
-    document.getElementById('explore-hint-card').style.display = 'block';
-    document.getElementById('exp-mnemonic').innerText = c.mnemonic;
-  } else if (mode === 'map' && currentQ) {
-    checkAnswer(c.id === currentQ.id);
+    document.getElementById('explore-flag-card').style.display = 'flex';
+    document.getElementById('explore-flag-img').src = country.flag;
+    document.getElementById('explore-details').style.display = 'block';
+    
+    document.getElementById('exp-name').innerText = country.name;
+    document.getElementById('exp-capital').innerText = country.cap;
+    document.getElementById('exp-region').innerText = country.reg;
+
+    let tierLabel = "UN Member";
+    if (country.tier === 195) tierLabel = "UN Observer State";
+    else if (country.tier === 200) tierLabel = "De Facto State";
+    else if (country.tier === 245) tierLabel = "World Territory";
+    document.getElementById('exp-status').innerText = tierLabel;
+
+    document.getElementById('explore-mnemonic-box').style.display = 'block';
+    document.getElementById('exp-mnemonic').innerText = country.m;
+  } 
+  else if (currentMode === 'map' && currentQuizTarget) {
+    const isCorrect = (country.id === currentQuizTarget.id);
+    evaluateQuizResult(isCorrect, 'map', numId);
   }
 }
 
-function setMode(m) {
-  mode = m;
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + m).classList.add('active');
+function switchMode(newMode) {
+  currentMode = newMode;
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.getElementById('btn-' + newMode).classList.add('active');
 
-  document.querySelectorAll('.land-path').forEach(p => {
-    p.classList.remove('active-target', 'correct', 'wrong');
-  });
+  // Reset visual state on map
+  d3.selectAll("path.country-path")
+    .classed("active-selected", false)
+    .classed("correct", false)
+    .classed("wrong", false);
 
   const banner = document.getElementById('map-floating-alert');
-  banner.style.display = (m === 'map') ? 'block' : 'none';
+  banner.style.display = (newMode === 'map') ? 'block' : 'none';
 
-  if (m === 'explore') {
+  if (newMode === 'explore') {
     document.getElementById('panel-explore').classList.add('active');
     document.getElementById('panel-quiz').classList.remove('active');
   } else {
     document.getElementById('panel-explore').classList.remove('active');
     document.getElementById('panel-quiz').classList.add('active');
-    nextQuestion();
+    generateNextQuestion();
   }
 }
 
-function nextQuestion() {
-  if (!filtered.length) return;
-  
-  // Leitner weight
-  const pool = [];
-  filtered.forEach(c => {
-    const score = memory[c.id] || 0;
-    const count = score <= 0 ? 3 : (score === 1 ? 2 : 1);
-    for (let i = 0; i < count; i++) pool.push(c);
+/* Leitner Spaced-Repetition Weighted Selector */
+function pickWeightedCountry() {
+  if (!filteredList.length) return COUNTRIES_MASTER[0];
+  const weights = filteredList.map(c => {
+    const score = userMemory[c.id] || 0;
+    if (score <= 0) return 4;   // Unseen or missed cards appear frequently
+    if (score === 1) return 2;  // Familiar
+    return 1;                   // Mastered cards appear sparingly
   });
-  currentQ = pool[Math.floor(Math.random() * pool.length)];
 
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+  let randomVal = Math.random() * totalWeight;
+
+  for (let i = 0; i < filteredList.length; i++) {
+    randomVal -= weights[i];
+    if (randomVal <= 0) return filteredList[i];
+  }
+  return filteredList[0];
+}
+
+function generateNextQuestion() {
+  if (!filteredList.length) return;
+  currentQuizTarget = pickWeightedCountry();
+
+  // Reset Hint Card
   document.getElementById('quiz-hint-card').style.display = 'none';
-  document.getElementById('hint-btn').style.display = 'block';
-  document.getElementById('quiz-flag-box').style.display = 'none';
-  const choicesBox = document.getElementById('quiz-choices');
-  choicesBox.innerHTML = '';
+  document.getElementById('quiz-hint-btn').style.display = 'block';
+  document.getElementById('quiz-flag-card').style.display = 'none';
 
-  const qTxt = document.getElementById('quiz-question-txt');
+  const qText = document.getElementById('quiz-question-text');
+  const optBox = document.getElementById('quiz-options-container');
   const banner = document.getElementById('map-floating-alert');
+  optBox.innerHTML = '';
 
-  if (mode === 'capitals') {
+  if (currentMode === 'capitals') {
     banner.style.display = 'none';
-    qTxt.innerText = `What is the capital of ${currentQ.name}?`;
-    renderChoices('capital');
-  } else if (mode === 'flags') {
+    qText.innerHTML = `What is the capital of <b style="color:var(--accent); margin-left:4px;">${currentQuizTarget.name}</b>?`;
+    renderMultipleChoiceButtons('cap');
+  } 
+  else if (currentMode === 'flags') {
     banner.style.display = 'none';
-    document.getElementById('quiz-flag-img').src = currentQ.flag;
-    document.getElementById('quiz-flag-box').style.display = 'flex';
-    qTxt.innerText = "Which country uses this flag?";
-    renderChoices('name');
-  } else if (mode === 'map') {
+    document.getElementById('quiz-flag-card').style.display = 'flex';
+    document.getElementById('quiz-flag-img').src = currentQuizTarget.flag;
+    qText.innerText = "Which country uses this flag?";
+    renderMultipleChoiceButtons('name');
+  } 
+  else if (currentMode === 'map') {
     banner.style.display = 'block';
-    banner.innerHTML = `Tap <b>${currentQ.name}</b> on the map`;
-    qTxt.innerText = `Locate ${currentQ.name}`;
-    choicesBox.innerHTML = `<div style="text-align:center; color:var(--text-muted); font-size:0.8rem; padding:10px;">Select the highlighted country directly on the map above.</div>`;
+    banner.innerHTML = `📍 Find <span style="color:var(--accent);">${currentQuizTarget.name}</span> on the map`;
+    qText.innerHTML = `Locate <span style="color:var(--accent); font-weight:800;">${currentQuizTarget.name}</span> on the world map above.`;
+    optBox.innerHTML = `
+      <div style="text-align:center; color:var(--text-muted); font-size:0.8rem; padding:12px 10px; background:rgba(0,0,0,0.2); border-radius:10px;">
+        Tap its territory directly on the world map. You can pinch or scroll to zoom.
+      </div>
+    `;
   }
 }
 
-function renderChoices(field) {
-  const opts = [currentQ[field]];
-  while (opts.length < Math.min(4, filtered.length)) {
-    const r = filtered[Math.floor(Math.random() * filtered.length)][field];
-    if (!opts.includes(r)) opts.push(r);
+function renderMultipleChoiceButtons(field) {
+  const correctVal = currentQuizTarget[field];
+  const choices = [correctVal];
+
+  while (choices.length < Math.min(4, filteredList.length)) {
+    const randomPick = filteredList[Math.floor(Math.random() * filteredList.length)][field];
+    if (!choices.includes(randomPick)) choices.push(randomPick);
   }
-  opts.sort(() => Math.random() - 0.5).forEach(choice => {
+
+  // Shuffle options
+  choices.sort(() => Math.random() - 0.5);
+
+  choices.forEach(val => {
     const btn = document.createElement('button');
-    btn.className = 'choice-btn';
-    btn.innerText = choice;
+    btn.className = 'opt-btn';
+    btn.innerHTML = `<span>${val}</span><span style="opacity:0.3;">›</span>`;
     btn.onclick = (e) => {
-      const isRight = (choice === currentQ[field]);
-      btn.classList.add(isRight ? 'correct' : 'wrong');
-      checkAnswer(isRight);
+      const isCorrect = (val === correctVal);
+      btn.classList.add(isCorrect ? 'correct' : 'wrong');
+      evaluateQuizResult(isCorrect, 'button');
     };
-    document.getElementById('quiz-choices').appendChild(btn);
+    document.getElementById('quiz-options-container').appendChild(btn);
   });
 }
 
-function showHint() {
-  document.getElementById('quiz-hint-txt').innerText = currentQ.mnemonic;
+function revealQuizHint() {
+  if (!currentQuizTarget) return;
+  document.getElementById('quiz-hint-text').innerText = `${currentQuizTarget.m} (Region: ${currentQuizTarget.reg})`;
   document.getElementById('quiz-hint-card').style.display = 'block';
-  document.getElementById('hint-btn').style.display = 'none';
+  document.getElementById('quiz-hint-btn').style.display = 'none';
 }
 
-function checkAnswer(isRight) {
-  total++;
-  if (isRight) {
-    correct++;
-    streak++;
-    memory[currentQ.id] = (memory[currentQ.id] || 0) + 1;
-  } else {
-    streak = 0;
-    memory[currentQ.id] = -1;
-  }
-  localStorage.setItem('geo_mem_v4', JSON.stringify(memory));
-  updateStats();
-
-  if (mode === 'map') {
-    const el = document.getElementById("land-" + currentQ.id);
-    if (el) el.classList.add(isRight ? 'correct' : 'wrong');
-    setTimeout(() => {
-      if (el) el.classList.remove('correct', 'wrong');
-      nextQuestion();
-    }, 700);
-  } else {
-    setTimeout(nextQuestion, 500);
-  }
-}
-
-function updateStats() {
-  const activeIds = new Set(filtered.map(c => c.id));
-  const mastered = Object.entries(memory).filter(([id, s]) => activeIds.has(id) && s >= 3).length;
-  document.getElementById('stat-streak').innerText = streak;
-  document.getElementById('stat-mastered').innerText = `${mastered}/${filtered.length}`;
-  document.getElementById('stat-acc').innerText = total === 0 ? '0%' : Ma  .logo-badge { background: linear-gradient(135deg, #0284c7, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  
-  .scope-select { background: rgba(0, 0, 0, 0.35); color: var(--accent); border: 1px solid var(--border); padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; outline: none; }
-
-  .nav-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; padding-bottom: 2px; }
-  .nav-tabs::-webkit-scrollbar { display: none; }
-  .tab-btn { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); color: var(--text-muted); padding: 6px 13px; border-radius: 20px; cursor: pointer; font-size: 0.76rem; font-weight: 700; white-space: nowrap; transition: all 0.2s; flex-shrink: 0; }
-  .tab-btn.active { background: var(--accent); color: #020617; border-color: var(--accent); box-shadow: 0 0 14px var(--accent-glow); }
-
-  main { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
-  #map-container { flex: 1; position: relative; background: radial-gradient(circle at center, #0e1526 0%, #05070c 100%); width: 100%; height: 100%; }
-  svg { width: 100%; height: 100%; display: block; touch-action: none; }
-
-  .country { fill: var(--country-fill); stroke: var(--country-stroke); stroke-width: 0.5px; cursor: pointer; transition: fill 0.15s, opacity 0.2s; }
-  .country:hover { fill: #0284c7; }
-  .country.dimmed { opacity: 0.18; fill: #101622; pointer-events: none; }
-  .country.active-target { fill: #f59e0b !important; filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.45)); }
-  .country.correct { fill: var(--success) !important; filter: drop-shadow(0 0 10px var(--success-glow)); }
-  .country.wrong { fill: var(--danger) !important; filter: drop-shadow(0 0 10px var(--danger-glow)); }
-
-  #map-banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(14, 20, 33, 0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-highlight); padding: 8px 16px; border-radius: 24px; font-size: 0.82rem; font-weight: 700; color: #fff; display: none; z-index: 10; box-shadow: 0 4px 20px rgba(0,0,0,0.5); pointer-events: none; text-align: center; }
-
-  #sidebar { width: 360px; background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; padding: 14px; gap: 12px; flex-shrink: 0; }
-  .panel { display: none; flex-direction: column; gap: 12px; }
-  .panel.active { display: flex; }
-
-  .flag-frame { width: 100%; height: 130px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; padding: 10px; }
-  .flag-frame img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); }
-
-  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .stat-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 7px 4px; text-align: center; }
-  .stat-val { font-size: 1.1rem; font-weight: 800; color: var(--accent); }
-  .stat-lbl { font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-top: 1px; }
-
-  .glass-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; font-size: 0.82rem; }
-  .info-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
-  .info-row:last-child { border-bottom: none; }
-  .info-label { color: var(--text-muted); font-size: 0.78rem; }
-  .info-value { font-weight: 700; color: #fff; text-align: right; }
-
-  .hint-card { background: rgba(30, 27, 75, 0.55); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: 10px; padding: 10px 12px; font-size: 0.8rem; line-height: 1.45; color: #c7d2fe; display: none; }
-  .hint-btn { background: transparent; border: 1px dashed var(--accent); color: var(--accent); padding: 8px; border-radius: 10px; cursor: pointer; font-size: 0.78rem; font-weight: 700; text-align: center; }
-
-  .options-grid { display: flex; flex-direction: column; gap: 7px; }
-  .opt-btn { background: var(--surface-card); border: 1px solid var(--border); color: var(--text); padding: 11px 14px; border-radius: 10px; cursor: pointer; text-align: left; font-size: 0.84rem; font-weight: 600; }
-  .opt-btn:active { transform: scale(0.98); }
-  .opt-btn.correct { background: var(--success) !important; color: #fff; border-color: var(--success); box-shadow: 0 0 14px var(--success-glow); }
-  .opt-btn.wrong { background: var(--danger) !important; color: #fff; border-color: var(--danger); box-shadow: 0 0 14px var(--danger-glow); }
-
-  @media (max-width: 800px) {
-    main { flex-direction: column; }
-    #map-container { height: 48%; min-height: 48%; }
-    #sidebar { width: 100%; height: 52%; border-left: none; border-top: 1px solid var(--border); padding: 12px; }
-    #map-banner { top: 8px; font-size: 0.76rem; padding: 6px 12px; }
-  }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="top-bar">
-    <div class="logo">🌍 <span class="logo-badge">GeoTrainer</span></div>
-    <select id="scope-selector" class="scope-select" onchange="onScopeChange(this.value)">
-      <option value="193">193: UN Members</option>
-      <option value="195" selected>195: Sovereign</option>
-      <option value="200">200: De Facto</option>
-      <option value="245">245: All Territories</option>
-    </select>
-  </div>
-  <nav class="nav-tabs">
-    <button class="tab-btn active" onclick="switchMode('explore')">🧭 Explore</button>
-    <button class="tab-btn" onclick="switchMode('capitals')">🏛️ Capitals</button>
-    <button class="tab-btn" onclick="switchMode('flags')">🏳️ Flags</button>
-    <button class="tab-btn" onclick="switchMode('map')">🗺️ Find on Map</button>
-  </nav>
-</header>
-
-<main>
-  <div id="map-container">
-    <div id="map-banner">Locate country on map</div>
-    <svg id="world-map"></svg>
-  </div>
-
-  <aside id="sidebar">
-    <div id="explore-panel" class="panel active">
-      <div id="flag-container" class="flag-frame" style="display:none;">
-        <img id="explore-flag" alt="Flag" />
-      </div>
-      <div id="explore-info" class="glass-card" style="display:none;">
-        <div class="info-row"><span class="info-label">Country</span><span class="info-value" id="explore-name">-</span></div>
-        <div class="info-row"><span class="info-label">Capital</span><span class="info-value" id="explore-capital">-</span></div>
-        <div class="info-row"><span class="info-label">Region</span><span class="info-value" id="explore-region">-</span></div>
-        <div class="info-row"><span class="info-label">Tier</span><span class="info-value" id="explore-tier">-</span></div>
-      </div>
-      <div id="explore-mnemonic-box" class="hint-card">
-        <strong style="color: #e0e7ff; display:block; margin-bottom: 3px;">🧠 Memory Anchor:</strong>
-        <span id="explore-mnemonic">-</span>
-      </div>
-      <div id="explore-empty-state" style="text-align: center; padding: 24px 10px; color: var(--text-muted); font-size: 0.82rem;">
-        Tap any highlighted country on the map to view its details.
-      </div>
-    </div>
-
-    <div id="quiz-panel" class="panel">
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-val" id="score-streak">0</div><div class="stat-lbl">Streak</div></div>
-        <div class="stat-card"><div class="stat-val" id="score-mastered">0</div><div class="stat-lbl">Mastered</div></div>
-        <div class="stat-card"><div class="stat-val" id="score-acc">0%</div><div class="stat-lbl">Accuracy</div></div>
-      </div>
-
-      <div id="quiz-flag-container" class="flag-frame" style="display:none;">
-        <img id="quiz-flag" alt="Quiz Flag" />
-      </div>
-
-      <div id="quiz-question" style="font-size: 0.95rem; font-weight: 700; text-align: center; min-height: 38px; display: flex; align-items: center; justify-content: center;">-</div>
-      <div class="options-grid" id="quiz-options"></div>
-
-      <button id="hint-trigger" class="hint-btn" onclick="revealHint()">💡 Need a Hint?</button>
-      <div id="quiz-hint-box" class="hint-card">
-        <span id="quiz-hint-text">-</span>
-      </div>
-    </div>
-  </aside>
-</main>
-
-<script>
-// Core Global ISO Crosswalk (Embedded locally for instantaneous load)
-const DB = [
-  {"code":"AF","num":"4","name":"Afghanistan","capital":"Kabul","region":"Asia","tier":193},
-  {"code":"AL","num":"8","name":"Albania","capital":"Tirana","region":"Europe","tier":193},
-  {"code":"DZ","num":"12","name":"Algeria","capital":"Algiers","region":"Africa","tier":193},
-  {"code":"AO","num":"24","name":"Angola","capital":"Luanda","region":"Africa","tier":193},
-  {"code":"AR","num":"32","name":"Argentina","capital":"Buenos Aires","region":"Americas","tier":193},
-  {"code":"AM","num":"51","name":"Armenia","capital":"Yerevan","region":"Asia","tier":193},
-  {"code":"AU","num":"36","name":"Australia","capital":"Canberra","region":"Oceania","tier":193},
-  {"code":"AT","num":"40","name":"Austria","capital":"Vienna","region":"Europe","tier":193},
-  {"code":"AZ","num":"31","name":"Azerbaijan","capital":"Baku","region":"Asia","tier":193},
-  {"code":"BD","num":"50","name":"Bangladesh","capital":"Dhaka","region":"Asia","tier":193},
-  {"code":"BY","num":"112","name":"Belarus","capital":"Minsk","region":"Europe","tier":193},
-  {"code":"BE","num":"56","name":"Belgium","capital":"Brussels","region":"Europe","tier":193},
-  {"code":"BO","num":"68","name":"Bolivia","capital":"Sucre","region":"Americas","tier":193},
-  {"code":"BA","num":"70","name":"Bosnia and Herzegovina","capital":"Sarajevo","region":"Europe","tier":193},
-  {"code":"BW","num":"72","name":"Botswana","capital":"Gaborone","region":"Africa","tier":193},
-  {"code":"BR","num":"76","name":"Brazil","capital":"Brasília","region":"Americas","tier":193},
-  {"code":"BG","num":"100","name":"Bulgaria","capital":"Sofia","region":"Europe","tier":193},
-  {"code":"BF","num":"854","name":"Burkina Faso","capital":"Ouagadougou","region":"Africa","tier":193},
-  {"code":"BI","num":"108","name":"Burundi","capital":"Gitega","region":"Africa","tier":193},
-  {"code":"KH","num":"116","name":"Cambodia","capital":"Phnom Penh","region":"Asia","tier":193},
-  {"code":"CM","num":"120","name":"Cameroon","capital":"Yaoundé","region":"Africa","tier":193},
-  {"code":"CA","num":"124","name":"Canada","capital":"Ottawa","region":"Americas","tier":193},
-  {"code":"TD","num":"148","name":"Chad","capital":"N'Djamena","region":"Africa","tier":193},
-  {"code":"CL","num":"152","name":"Chile","capital":"Santiago","region":"Americas","tier":193},
-  {"code":"CN","num":"156","name":"China","capital":"Beijing","region":"Asia","tier":193},
-  {"code":"CO","num":"170","name":"Colombia","capital":"Bogotá","region":"Americas","tier":193},
-  {"code":"CG","num":"178","name":"Congo","capital":"Brazzaville","region":"Africa","tier":193},
-  {"code":"CD","num":"180","name":"DR Congo","capital":"Kinshasa","region":"Africa","tier":193},
-  {"code":"CR","num":"188","name":"Costa Rica","capital":"San José","region":"Americas","tier":193},
-  {"code":"HR","num":"191","name":"Croatia","capital":"Zagreb","region":"Europe","tier":193},
-  {"code":"CU","num":"192","name":"Cuba","capital":"Havana","region":"Americas","tier":193},
-  {"code":"CZ","num":"203","name":"Czech Republic","capital":"Prague","region":"Europe","tier":193},
-  {"code":"DK","num":"208","name":"Denmark","capital":"Copenhagen","region":"Europe","tier":193},
-  {"code":"DO","num":"214","name":"Dominican Republic","capital":"Santo Domingo","region":"Americas","tier":193},
-  {"code":"EC","num":"218","name":"Ecuador","capital":"Quito","region":"Americas","tier":193},
-  {"code":"EG","num":"818","name":"Egypt","capital":"Cairo","region":"Africa","tier":193},
-  {"code":"ET","num":"231","name":"Ethiopia","capital":"Addis Ababa","region":"Africa","tier":193},
-  {"code":"FI","num":"246","name":"Finland","capital":"Helsinki","region":"Europe","tier":193},
-  {"code":"FR","num":"250","name":"France","capital":"Paris","region":"Europe","tier":193},
-  {"code":"GE","num":"268","name":"Georgia","capital":"Tbilisi","region":"Asia","tier":193},
-  {"code":"DE","num":"276","name":"Germany","capital":"Berlin","region":"Europe","tier":193},
-  {"code":"GH","num":"288","name":"Ghana","capital":"Accra","region":"Africa","tier":193},
-  {"code":"GR","num":"300","name":"Greece","capital":"Athens","region":"Europe","tier":193},
-  {"code":"GT","num":"320","name":"Guatemala","capital":"Guatemala City","region":"Americas","tier":193},
-  {"code":"HN","num":"340","name":"Honduras","capital":"Tegucigalpa","region":"Americas","tier":193},
-  {"code":"HU","num":"348","name":"Hungary","capital":"Budapest","region":"Europe","tier":193},
-  {"code":"IS","num":"352","name":"Iceland","capital":"Reykjavík","region":"Europe","tier":193},
-  {"code":"IN","num":"356","name":"India","capital":"New Delhi","region":"Asia","tier":193},
-  {"code":"ID","num":"360","name":"Indonesia","capital":"Jakarta","region":"Asia","tier":193},
-  {"code":"IR","num":"364","name":"Iran","capital":"Tehran","region":"Asia","tier":193},
-  {"code":"IQ","num":"368","name":"Iraq","capital":"Baghdad","region":"Asia","tier":193},
-  {"code":"IE","num":"372","name":"Ireland","capital":"Dublin","region":"Europe","tier":193},
-  {"code":"IL","num":"376","name":"Israel","capital":"Jerusalem","region":"Asia","tier":193},
-  {"code":"IT","num":"380","name":"Italy","capital":"Rome","region":"Europe","tier":193},
-  {"code":"JP","num":"392","name":"Japan","capital":"Tokyo","region":"Asia","tier":193},
-  {"code":"JO","num":"400","name":"Jordan","capital":"Amman","region":"Asia","tier":193},
-  {"code":"KZ","num":"398","name":"Kazakhstan","capital":"Astana","region":"Asia","tier":193},
-  {"code":"KE","num":"404","name":"Kenya","capital":"Nairobi","region":"Africa","tier":193},
-  {"code":"KP","num":"408","name":"North Korea","capital":"Pyongyang","region":"Asia","tier":193},
-  {"code":"KR","num":"410","name":"South Korea","capital":"Seoul","region":"Asia","tier":193},
-  {"code":"KW","num":"414","name":"Kuwait","capital":"Kuwait City","region":"Asia","tier":193},
-  {"code":"KG","num":"417","name":"Kyrgyzstan","capital":"Bishkek","region":"Asia","tier":193},
-  {"code":"LA","num":"418","name":"Laos","capital":"Vientiane","region":"Asia","tier":193},
-  {"code":"LB","num":"422","name":"Lebanon","capital":"Beirut","region":"Asia","tier":193},
-  {"code":"LY","num":"434","name":"Libya","capital":"Tripoli","region":"Africa","tier":193},
-  {"code":"MG","num":"450","name":"Madagascar","capital":"Antananarivo","region":"Africa","tier":193},
-  {"code":"MY","num":"458","name":"Malaysia","capital":"Kuala Lumpur","region":"Asia","tier":193},
-  {"code":"MX","num":"484","name":"Mexico","capital":"Mexico City","region":"Americas","tier":193},
-  {"code":"MN","num":"496","name":"Mongolia","capital":"Ulaanbaatar","region":"Asia","tier":193},
-  {"code":"MA","num":"504","name":"Morocco","capital":"Rabat","region":"Africa","tier":193},
-  {"code":"MZ","num":"508","name":"Mozambique","capital":"Maputo","region":"Africa","tier":193},
-  {"code":"MM","num":"104","name":"Myanmar","capital":"Naypyidaw","region":"Asia","tier":193},
-  {"code":"NP","num":"524","name":"Nepal","capital":"Kathmandu","region":"Asia","tier":193},
-  {"code":"NL","num":"528","name":"Netherlands","capital":"Amsterdam","region":"Europe","tier":193},
-  {"code":"NZ","num":"554","name":"New Zealand","capital":"Wellington","region":"Oceania","tier":193},
-  {"code":"NG","num":"566","name":"Nigeria","capital":"Abuja","region":"Africa","tier":193},
-  {"code":"NO","num":"578","name":"Norway","capital":"Oslo","region":"Europe","tier":193},
-  {"code":"OM","num":"512","name":"Oman","capital":"Muscat","region":"Asia","tier":193},
-  {"code":"PK","num":"586","name":"Pakistan","capital":"Islamabad","region":"Asia","tier":193},
-  {"code":"PA","num":"591","name":"Panama","capital":"Panama City","region":"Americas","tier":193},
-  {"code":"PY","num":"600","name":"Paraguay","capital":"Asunción","region":"Americas","tier":193},
-  {"code":"PE","num":"604","name":"Peru","capital":"Lima","region":"Americas","tier":193},
-  {"code":"PH","num":"608","name":"Philippines","capital":"Manila","region":"Asia","tier":193},
-  {"code":"PL","num":"616","name":"Poland","capital":"Warsaw","region":"Europe","tier":193},
-  {"code":"PT","num":"620","name":"Portugal","capital":"Lisbon","region":"Europe","tier":193},
-  {"code":"QA","num":"634","name":"Qatar","capital":"Doha","region":"Asia","tier":193},
-  {"code":"RO","num":"642","name":"Romania","capital":"Bucharest","region":"Europe","tier":193},
-  {"code":"RU","num":"643","name":"Russia","capital":"Moscow","region":"Europe","tier":193},
-  {"code":"SA","num":"682","name":"Saudi Arabia","capital":"Riyadh","region":"Asia","tier":193},
-  {"code":"SN","num":"686","name":"Senegal","capital":"Dakar","region":"Africa","tier":193},
-  {"code":"RS","num":"688","name":"Serbia","capital":"Belgrade","region":"Europe","tier":193},
-  {"code":"SG","num":"702","name":"Singapore","capital":"Singapore","region":"Asia","tier":193},
-  {"code":"ZA","num":"710","name":"South Africa","capital":"Pretoria","region":"Africa","tier":193},
-  {"code":"ES","num":"724","name":"Spain","capital":"Madrid","region":"Europe","tier":193},
-  {"code":"LK","num":"144","name":"Sri Lanka","capital":"Colombo","region":"Asia","tier":193},
-  {"code":"SE","num":"752","name":"Sweden","capital":"Stockholm","region":"Europe","tier":193},
-  {"code":"CH","num":"756","name":"Switzerland","capital":"Bern","region":"Europe","tier":193},
-  {"code":"TH","num":"764","name":"Thailand","capital":"Bangkok","region":"Asia","tier":193},
-  {"code":"TR","num":"792","name":"Turkey","capital":"Ankara","region":"Asia","tier":193},
-  {"code":"UA","num":"804","name":"Ukraine","capital":"Kyiv","region":"Europe","tier":193},
-  {"code":"AE","  .top-bar { display: flex; justify-content: space-between; align-items: center; }
-  .logo { font-size: 1rem; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 6px; }
-  .logo-badge { background: linear-gradient(135deg, #0284c7, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-  
-  .scope-select { background: rgba(0, 0, 0, 0.35); color: var(--accent); border: 1px solid var(--border); padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; outline: none; transition: border-color 0.2s; }
-  .scope-select:focus { border-color: var(--accent); }
-
-  /* Horizontal Scrollable Tabs */
-  .nav-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; padding-bottom: 2px; }
-  .nav-tabs::-webkit-scrollbar { display: none; }
-  .tab-btn { background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); color: var(--text-muted); padding: 6px 13px; border-radius: 20px; cursor: pointer; font-size: 0.76rem; font-weight: 700; white-space: nowrap; display: flex; align-items: center; gap: 5px; transition: all 0.2s; flex-shrink: 0; }
-  .tab-btn.active { background: var(--accent); color: #020617; border-color: var(--accent); box-shadow: 0 0 14px var(--accent-glow); }
-
-  /* Main Workspace */
-  main { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
-  #map-container { flex: 1; position: relative; background: radial-gradient(circle at center, #0e1526 0%, #05070c 100%); width: 100%; height: 100%; }
-  svg { width: 100%; height: 100%; display: block; touch-action: none; }
-
-  /* Map Styles */
-  .country { fill: var(--country-fill); stroke: var(--country-stroke); stroke-width: 0.5px; cursor: pointer; transition: fill 0.15s, opacity 0.2s; }
-  .country:hover { fill: #0284c7; }
-  .country.dimmed { opacity: 0.18; fill: #101622; pointer-events: none; }
-  .country.active-target { fill: #f59e0b !important; filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.45)); }
-  .country.correct { fill: var(--success) !important; filter: drop-shadow(0 0 10px var(--success-glow)); }
-  .country.wrong { fill: var(--danger) !important; filter: drop-shadow(0 0 10px var(--danger-glow)); }
-
-  /* Floating Target Banner for Find on Map Mode */
-  #map-banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(14, 20, 33, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-highlight); padding: 8px 16px; border-radius: 24px; font-size: 0.82rem; font-weight: 700; color: #fff; display: none; z-index: 10; box-shadow: 0 4px 20px rgba(0,0,0,0.5); pointer-events: none; text-align: center; }
-
-  /* Sidebar Bottom / Drawer */
-  #sidebar { width: 360px; background: var(--surface); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; padding: 14px; gap: 12px; flex-shrink: 0; }
-  .panel { display: none; flex-direction: column; gap: 12px; }
-  .panel.active { display: flex; }
-
-  /* Flag Box - Full Aspect Ratio Visibility */
-  .flag-frame { width: 100%; min-height: 120px; max-height: 150px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; padding: 10px; overflow: hidden; }
-  .flag-frame img { max-width: 100%; max-height: 130px; width: auto; height: auto; object-fit: contain; border-radius: 4px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45); }
-
-  /* Stat Grid */
-  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .stat-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 7px 4px; text-align: center; }
-  .stat-val { font-size: 1.1rem; font-weight: 800; color: var(--accent); }
-  .stat-lbl { font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-top: 1px; }
-
-  /* Cards and Rows */
-  .glass-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; font-size: 0.82rem; }
-  .info-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
-  .info-row:last-child { border-bottom: none; }
-  .info-label { color: var(--text-muted); font-size: 0.78rem; }
-  .info-value { font-weight: 700; color: #fff; text-align: right; }
-
-  .hint-card { background: rgba(30, 27, 75, 0.55); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: 10px; padding: 10px 12px; font-size: 0.8rem; line-height: 1.45; color: #c7d2fe; display: none; }
-  .hint-btn { background: transparent; border: 1px dashed var(--accent); color: var(--accent); padding: 8px; border-radius: 10px; cursor: pointer; font-size: 0.78rem; font-weight: 700; text-align: center; transition: all 0.2s; }
-  .hint-btn:active { background: var(--accent-glow); }
-
-  /* Quiz Option Buttons */
-  .options-grid { display: flex; flex-direction: column; gap: 7px; }
-  .opt-btn { background: var(--surface-card); border: 1px solid var(--border); color: var(--text); padding: 11px 14px; border-radius: 10px; cursor: pointer; text-align: left; font-size: 0.84rem; font-weight: 600; transition: all 0.15s; }
-  .opt-btn:active { transform: scale(0.98); }
-  .opt-btn.correct { background: var(--success) !important; color: #fff; border-color: var(--success); box-shadow: 0 0 14px var(--success-glow); }
-  .opt-btn.wrong { background: var(--danger) !important; color: #fff; border-color: var(--danger); box-shadow: 0 0 14px var(--danger-glow); }
-
-  /* Loading Overlay */
-  #loader { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; gap: 12px; font-size: 0.88rem; font-weight: 700; color: var(--accent); }
-  .spinner { width: 34px; height: 34px; border: 3px solid rgba(56, 189, 248, 0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  @media (max-width: 800px) {
-    main { flex-direction: column; }
-    #map-container { height: 48%; min-height: 48%; }
-    #sidebar { width: 100%; height: 52%; border-left: none; border-top: 1px solid var(--border); padding: 12px; }
-    #map-banner { top: 8px; font-size: 0.76rem; padding: 6px 12px; }
-  }
-</style>
-</head>
-<body>
-
-<div id="loader">
-  <div class="spinner"></div>
-  <span>Loading Atlas...</span>
-</div>
-
-<header>
-  <div class="top-bar">
-    <div class="logo">🌍 <span class="logo-badge">GeoTrainer</span></div>
-    <select id="scope-selector" class="scope-select" onchange="onScopeChange(this.value)">
-      <option value="193">193: UN Members</option>
-      <option value="195" selected>195: Sovereign</option>
-      <option value="200">200: De Facto</option>
-      <option value="245">245: All Territories</option>
-    </select>
-  </div>
-  <nav class="nav-tabs">
-    <button class="tab-btn active" onclick="switchMode('explore')">🧭 Explore</button>
-    <button class="tab-btn" onclick="switchMode('capitals')">🏛️ Capitals</button>
-    <button class="tab-btn" onclick="switchMode('flags')">🏳️ Flags</button>
-    <button class="tab-btn" onclick="switchMode('map')">🗺️ Find on Map</button>
-  </nav>
-</header>
-
-<main>
-  <div id="map-container">
-    <div id="map-banner">Locate country on map</div>
-    <svg id="world-map"></svg>
-  </div>
-
-  <aside id="sidebar">
-    <!-- Explore Mode -->
-    <div id="explore-panel" class="panel active">
-      <div id="flag-container" class="flag-frame" style="display:none;">
-        <img id="explore-flag" alt="Flag" />
-      </div>
-      <div id="explore-info" class="glass-card" style="display:none;">
-        <div class="info-row"><span class="info-label">Country</span><span class="info-value" id="explore-name">-</span></div>
-        <div class="info-row"><span class="info-label">Capital</span><span class="info-value" id="explore-capital">-</span></div>
-        <div class="info-row"><span class="info-label">Region</span><span class="info-value" id="explore-region">-</span></div>
-        <div class="info-row"><span class="info-label">Tier</span><span class="info-value" id="explore-tier">-</span></div>
-      </div>
-      <div id="explore-mnemonic-box" class="hint-card">
-        <strong style="color: #e0e7ff; display:block; margin-bottom: 3px;">🧠 Memory Anchor:</strong>
-        <span id="explore-mnemonic">-</span>
-      </div>
-      <div id="explore-empty-state" style="text-align: center; padding: 24px 10px; color: var(--text-muted); font-size: 0.82rem;">
-        Tap any highlighted territory on the globe to reveal its flag, capital, and regional data.
-      </div>
-    </div>
-
-    <!-- Quiz Modes (Capitals, Flags, Find on Map) -->
-    <div id="quiz-panel" class="panel">
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-val" id="score-streak">0</div><div class="stat-lbl">Streak</div></div>
-        <div class="stat-card"><div class="stat-val" id="score-mastered">0</div><div class="stat-lbl">Mastered</div></div>
-        <div class="stat-card"><div class="stat-val" id="score-acc">0%</div><div class="stat-lbl">Accuracy</div></div>
-      </div>
-
-      <div id="quiz-flag-container" class="flag-frame" style="display:none;">
-        <img id="quiz-flag" alt="Quiz Flag" />
-      </div>
-
-      <div id="quiz-question" style="font-size: 0.95rem; font-weight: 700; text-align: center; min-height: 38px; display: flex; align-items: center; justify-content: center;">-</div>
-      
-      <div class="options-grid" id="quiz-options"></div>
-
-      <button id="hint-trigger" class="hint-btn" onclick="revealHint()">💡 Need a Hint?</button>
-      <div id="quiz-hint-box" class="hint-card">
-        <span id="quiz-hint-text">-</span>
-      </div>
-    </div>
-  </aside>
-</main>
-
-<script>
-const UN_OBSERVERS = new Set(["VA", "PS"]);
-const DE_FACTO = new Set(["TW", "XK", "EH"]);
-
-let allCountries = [];
-let numMap = new Map();
-let selectedTierLimit = 195;
-let filteredCountries = [];
-let memory = JSON.parse(localStorage.getItem('geo_memory_v2') || '{}');
-let currentMode = 'explore';
-let currentQuestion = null;
-let streak = 0, total = 0, correct = 0;
-let svg, g;
-
-async function bootstrap() {
-  try {
-    const resp = await fetch("https://raw.githubusercontent.com/mledoze/countries/master/countries.json");
-    const raw = await resp.json();
-
-    allCountries = raw.filter(m => m.capital && m.capital.length && m.cca2 && m.ccn3).map(m => {
-      const cca2 = m.cca2.toUpperCase();
-      let tier = 245;
-      if (m.unMember) tier = 193;
-      else if (UN_OBSERVERS.has(cca2)) tier = 195;
-      else if (DE_FACTO.has(cca2) || m.independent) tier = 200;
-
-      const capital = Array.isArray(m.capital) ? m.capital[0] : m.capital;
-      const name = m.name?.common || "Unknown";
-
-      return {
-        code: cca2,
-        num: String(parseInt(m.ccn3, 10)),
-        name: name,
-        capital: capital,
-        region: m.region || "Other",
-        subregion: m.subregion || "Other",
-        flag: `https://flagcdn.com/${cca2.toLowerCase()}.svg`,
-        tier: tier,
-        mnemonic: `Associate ${capital} directly with ${name}. Located in ${m.subregion || m.region}.`
-      };
-    });
-
-    allCountries.sort((a, b) => a.name.localeCompare(b.name));
-    allCountries.forEach(c => numMap.set(c.num, c));
-
-    await initMap();
-    applyScopeFilter();
-    document.getElementById('loader').style.display = 'none';
-  } catch (err) {
-    document.getElementById('loader').innerHTML = `<p style="color:var(--danger);">Error loading data. Refresh to retry.</p>`;
-  }
-}
-
-function applyScopeFilter() {
-  filteredCountries = allCountries.filter(c => c.tier <= selectedTierLimit);
-  updateStats();
-  updateMapHighlighting();
-}
-
-function onScopeChange(val) {
-  selectedTierLimit = parseInt(val, 10);
-  applyScopeFilter();
-  if (currentMode !== 'explore') nextQuestion();
-}
-
-function saveMemory() {
-  localStorage.setItem('geo_memory_v2', JSON.stringify(memory));
-  updateStats();
-}
-
-function updateStats() {
-  const activeCodes = new Set(filteredCountries.map(c => c.code));
-  const mastered = Object.entries(memory).filter(([code, score]) => activeCodes.has(code) && score >= 3).length;
-  document.getElementById('score-streak').innerText = streak;
-  document.getElementById('score-mastered').innerText = `${mastered}/${filteredCountries.length}`;
-  document.getElementById('score-acc').innerText = total === 0 ? '0%' : Math.round((correct / total) * 100) + '%';
-}
-
-async function initMap() {
-  const container = document.getElementById('map-container');
-  const width = container.clientWidth || window.innerWidth;
-  const height = container.clientHeight || (window.innerHeight * 0.48);
-
-  svg = d3.select("#world-map").attr("viewBox", [0, 0, width, height]);
-  const projection = d3.geoNaturalEarth1().scale(width / 5.5).translate([width / 2, height / 1.85]);
-  const path = d3.geoPath().projection(projection);
-  g = svg.append("g");
-
-  svg.call(d3.zoom().scaleExtent([1, 14]).on("zoom", (e) => g.attr("transform", e.transform)));
-
-  const world = await d3.json("https://unpkg.com/world-atlas@2.0.2/countries-110m.json");
-  const shapes = topojson.feature(world, world.objects.countries).features;
-
-  g.selectAll("path")
-   .data(shapes)
-   .enter().append("path")
-   .attr("class", "country")
-   .attr("d", path)
-   .attr("id", d => "num-" + parseInt(d.id, 10))
-   .on("click", (e, d) => handleMapSelection(parseInt(d.id, 10)));
-}
-
-function updateMapHighlighting() {
-  if (!g) return;
-  const activeNums = new Set(filteredCountries.map(c => parseInt(c.num, 10)));
-  g.selectAll("path.country").classed("dimmed", d => !activeNums.has(parseInt(d.id, 10)));
-}
-
-function handleMapSelection(numId) {
-  const c = numMap.get(String(numId));
-  if (!c || c.tier > selectedTierLimit) return;
-
-  if (currentMode === 'explore') {
-    g.selectAll("path.country").classed("active-target", false);
-    d3.select("#num-" + numId).classed("active-target", true);
-
-    document.getElementById('explore-empty-state').style.display = 'none';
-    document.getElementById('explore-flag').src = c.flag;
-    document.getElementById('flag-container').style.display = 'flex';
-    document.getElementById('explore-name').innerText = c.name;
-    document.getElementById('explore-capital').innerText = c.capital;
-    document.getElementById('explore-region').innerText = c.subregion;
-    
-    let tierLabel = "UN Member";
-    if (c.tier === 195) tierLabel = "UN Observer";
-    else if (c.tier === 200) tierLabel = "De Facto State";
-    else if (c.tier === 245) tierLabel = "Territory/Dependency";
-    document.getElementById('explore-tier').innerText = tierLabel;
-
-    document.getElementById('explore-mnemonic').innerText = c.mnemonic;
-    document.getElementById('explore-info').style.display = 'block';
-    document.getElementById('explore-mnemonic-box').style.display = 'block';
-  } else if (currentMode === 'map' && currentQuestion) {
-    evaluateAnswer(c.code === currentQuestion.code);
-  }
-}
-
-function switchMode(m) {
-  currentMode = m;
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-
-  g.selectAll("path.country").classed("active-target", false).classed("correct", false).classed("wrong", false);
-
-  const banner = document.getElementById('map-banner');
-  banner.style.display = (m === 'map') ? 'block' : 'none';
-
-  if (m === 'explore') {
-    document.getElementById('explore-panel').classList.add('active');
-    document.getElementById('quiz-panel').classList.remove('active');
-  } else {
-    document.getElementById('explore-panel').classList.remove('active');
-    document.getElementById('quiz-panel').classList.add('active');
-    nextQuestion();
-  }
-}
-
-function pickWeightedTarget() {
-  const weights = filteredCountries.map(c => {
-    const score = memory[c.code] || 0;
-    return score <= 0 ? 4 : (score === 1 ? 2 : 1);
-  });
-  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < filteredCountries.length; i++) {
-    r -= weights[i];
-    if (r <= 0) return filteredCountries[i];
-  }
-  return filteredCountries[0];
-}
-
-function nextQuestion() {
-  if (!filteredCountries.length) return;
-  currentQuestion = pickWeightedTarget();
-  document.getElementById('quiz-hint-box').style.display = 'none';
-  document.getElementById('hint-trigger').style.display = 'block';
-  document.getElementById('quiz-flag-container').style.display = 'none';
-  const optBox = document.getElementById('quiz-options');
-  optBox.innerHTML = '';
-
-  const banner = document.getElementById('map-banner');
-
-  if (currentMode === 'capitals') {
-    banner.style.display = 'none';
-    document.getElementById('quiz-question').innerText = `What is the capital of ${currentQuestion.name}?`;
-    makeOptions('capital');
-  } else if (currentMode === 'flags') {
-    banner.style.display = 'none';
-    document.getElementById('quiz-flag').src = currentQuestion.flag;
-    document.getElementById('quiz-flag-container').style.display = 'flex';
-    document.getElementById('quiz-question').innerText = "Which country uses this flag?";
-    makeOptions('name');
-  } else if (currentMode === 'map') {
-    banner.style.display = 'block';
-    banner.innerHTML = `📍 Find <span style="color:var(--accent);">${currentQuestion.name}</span> on the map`;
-    document.getElementById('quiz-question').innerText = `Locate ${currentQuestion.name} on the map`;
-    optBox.innerHTML = `<div style="text-align:center; color:var(--text-muted); font-size:0.8rem; padding:10px;">Tap its territory directly on the world map above.</div>`;
-  }
-}
-
-function makeOptions(field) {
-  const opts = [currentQuestion[field]];
-  while (opts.length < Math.min(4, filteredCountries.length)) {
-    const rand = filteredCountries[Math.floor(Math.random() * filteredCountries.length)][field];
-    if (!opts.includes(rand)) opts.push(rand);
-  }
-  opts.sort(() => Math.random() - 0.5).forEach(val => {
-    const btn = document.createElement('button');
-    btn.className = 'opt-btn';
-    btn.innerText = val;
-    btn.onclick = () => evaluateAnswer(val === currentQuestion[field]);
-    document.getE  .country:hover, .country:active { fill: #0284c7; }
-  .country.dimmed { opacity: 0.25; fill: #1e293b; pointer-events: none; }
-  .country.active-target { fill: #f59e0b !important; }
-  .country.correct { fill: var(--success) !important; }
-  .country.wrong { fill: var(--danger) !important; }
-  
-  #sidebar { width: 340px; background: var(--card); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; padding: 14px; gap: 12px; flex-shrink: 0; }
-  .panel { display: none; flex-direction: column; gap: 10px; }
-  .panel.active { display: flex; }
-  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .stat-card { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 6px; text-align: center; }
-  .stat-val { font-size: 1.05rem; font-weight: 700; color: var(--accent); }
-  .stat-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
-  .flag-img { width: 100%; max-height: 120px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
-  .info-box { background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 0.82rem; }
-  .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-  .info-row:last-child { margin-bottom: 0; }
-  .hint-card { background: #1e1b4b; border: 1px solid #4338ca; border-radius: 6px; padding: 10px; font-size: 0.8rem; line-height: 1.4; color: #c7d2fe; display: none; }
-  .hint-btn { background: transparent; border: 1px dashed var(--accent); color: var(--accent); padding: 7px; border-radius: 6px; cursor: pointer; font-size: 0.78rem; font-weight: 600; text-align: center; }
-  .options-grid { display: flex; flex-direction: column; gap: 6px; }
-  .opt-btn { background: #182234; border: 1px solid var(--border); color: var(--text); padding: 9px 12px; border-radius: 6px; cursor: pointer; text-align: left; font-size: 0.82rem; }
-  .opt-btn:hover { background: #26354f; }
-  .opt-btn.correct { background: var(--success) !important; }
-  .opt-btn.wrong { background: var(--danger) !important; }
-
-  @media (max-width: 800px) {
-    body { height: 100dvh; }
-    main { flex-direction: column; }
-    #map-container { height: 50%; min-height: 50%; }
-    #sidebar { width: 100%; height: 50%; border-left: none; border-top: 1px solid var(--border); }
-  }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="header-left">
-    <h1>World Geo Trainer</h1>
-    <select id="scope-selector" class="scope-select" onchange="onScopeChange(this.value)">
-      <option value="193">193: UN Members</option>
-      <option value="195" selected>195: Sovereign States</option>
-      <option value="200">200: De Facto / Disputed</option>
-      <option value="245">245: All World Territories</option>
-    </select>
-  </div>
-  <div class="tabs">
-    <button class="tab-btn active" onclick="switchMode('explore')">Explore</button>
-    <button class="tab-btn" onclick="switchMode('capitals')">Capitals</button>
-    <button class="tab-btn" onclick="switchMode('flags')">Flags</button>
-    <button class="tab-btn" onclick="switchMode('map')">Map Quiz</button>
-  </div>
-</header>
-
-<main>
-  <div id="map-container">
-    <svg id="world-map"></svg>
-  </div>
-  <aside id="sidebar">
-    <div id="explore-panel" class="panel active">
-      <h2 style="font-size: 0.95rem;">Country Explorer</h2>
-      <p style="font-size: 0.75rem; color: var(--text-muted);">Tap any visible country on the map to inspect its details.</p>
-      <img id="explore-flag" class="flag-img" style="display:none;" />
-      <div id="explore-info" class="info-box" style="display:none;">
-        <div class="info-row"><span style="color:var(--text-muted)">Country:</span><strong id="explore-name">-</strong></div>
-        <div class="info-row"><span style="color:var(--text-muted)">Capital:</span><strong id="explore-capital">-</strong></div>
-        <div class="info-row"><span style="color:var(--text-muted)">Region:</span><span id="explore-region">-</span></div>
-        <div class="info-row"><span style="color:var(--text-muted)">Tier:</span><span id="explore-tier">-</span></div>
-      </div>
-      <div id="explore-mnemonic-box" class="hint-card">
-        <strong style="color: #e0e7ff; display:block; margin-bottom: 4px;">🧠 Capital Anchor:</strong>
-        <span id="explore-mnemonic">-</span>
-      </div>
-    </div>
-
-    <div id="quiz-panel" class="panel">
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-val" id="score-streak">0</div><div class="stat-lbl">Streak</div></div>
-        <div class="stat-card"><div class="stat-val" id="score-mastered">0</div><div class="stat-lbl">Mastered</div></div>
-        <div class="stat-card"><div class="stat-val" id="score-acc">0%</div><div class="stat-lbl">Accuracy</div></div>
-      </div>
-
-      <img id="quiz-flag" class="flag-img" style="display:none;" />
-      <div id="quiz-question" style="font-size: 0.9rem; font-weight: 600; text-align: center;">-</div>
-      <div class="options-grid" id="quiz-options"></div>
-
-      <button id="hint-trigger" class="hint-btn" onclick="revealHint()">💡 Need a Hint?</button>
-      <div id="quiz-hint-box" class="hint-card">
-        <span id="quiz-hint-text">-</span>
-      </div>
-    </div>
-  </aside>
-</main>
-
-<script>
-const allCountries = [{"code": "AF", "num": "4", "name": "Afghanistan", "capital": "Kabul", "region": "Asia", "subregion": "Southern Asia", "flag": "https://flagcdn.com/af.svg", "tier": 193, "mnemonic": "Associate Kabul directly with Afghanistan.", "visual_fact": "Located in Southern Asia."}, {"code": "AL", "num": "8", "name": "Albania", "capital": "Tirana", "region": "Europe", "subregion": "Southeast Europe", "flag": "https://flagcdn.com/al.svg", "tier": 193, "mnemonic": "Associate Tirana directly with Albania.", "visual_fact": "Located in Southeast Europe."}, {"code": "DZ", "num": "12", "name": "Algeria", "capital": "Algiers", "region": "Africa", "subregion": "Northern Africa", "flag": "https://flagcdn.com/dz.svg", "tier": 193, "mnemonic": "Associate Algiers directly with Algeria.", "visual_fact": "Located in Northern Africa."}, {"code": "AS", "num": "16", "name": "American Samoa", "capital": "Pago Pago", "region": "Oceania", "subregion": "Polynesia", "flag": "https://flagcdn.com/as.svg", "tier": 245, "mnemonic": "Associate Pago Pago directly with American Samoa.", "visual_fact": "Located in Polynesia."}, {"code": "AD", "num": "20", "name": "Andorra", "capital": "Andorra la Vella", "region": "Europe", "subregion": "Southern Europe", "flag": "https://flagcdn.com/ad.svg", "tier": 193, "mnemonic": "Associate Andorra la Vella directly with Andorra.", "visual_fact": "Located in Southern Europe."}, {"code": "AO", "num": "24", "name": "Angola", "capital": "Luanda", "region": "Africa", "subregion": "Middle Africa", "flag": "https://flagcdn.com/ao.svg", "tier": 193, "mnemonic": "Associate Luanda directly with Angola.", "visual_fact": "Located in Middle Africa."}, {"code": "AI", "num": "660", "name": "Anguilla", "capital": "The Valley", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/ai.svg", "tier": 245, "mnemonic": "Associate The Valley directly with Anguilla.", "visual_fact": "Located in Caribbean."}, {"code": "AG", "num": "28", "name": "Antigua and Barbuda", "capital": "Saint John's", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/ag.svg", "tier": 193, "mnemonic": "Associate Saint John's directly with Antigua and Barbuda.", "visual_fact": "Located in Caribbean."}, {"code": "AR", "num": "32", "name": "Argentina", "capital": "Buenos Aires", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/ar.svg", "tier": 193, "mnemonic": "Associate Buenos Aires directly with Argentina.", "visual_fact": "Located in South America."}, {"code": "AM", "num": "51", "name": "Armenia", "capital": "Yerevan", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/am.svg", "tier": 193, "mnemonic": "Associate Yerevan directly with Armenia.", "visual_fact": "Located in Western Asia."}, {"code": "AW", "num": "533", "name": "Aruba", "capital": "Oranjestad", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/aw.svg", "tier": 245, "mnemonic": "Associate Oranjestad directly with Aruba.", "visual_fact": "Located in Caribbean."}, {"code": "AU", "num": "36", "name": "Australia", "capital": "Canberra", "region": "Oceania", "subregion": "Australia and New Zealand", "flag": "https://flagcdn.com/au.svg", "tier": 193, "mnemonic": "Associate Canberra directly with Australia.", "visual_fact": "Located in Australia and New Zealand."}, {"code": "AT", "num": "40", "name": "Austria", "capital": "Vienna", "region": "Europe", "subregion": "Central Europe", "flag": "https://flagcdn.com/at.svg", "tier": 193, "mnemonic": "Associate Vienna directly with Austria.", "visual_fact": "Located in Central Europe."}, {"code": "AZ", "num": "31", "name": "Azerbaijan", "capital": "Baku", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/az.svg", "tier": 193, "mnemonic": "Associate Baku directly with Azerbaijan.", "visual_fact": "Located in Western Asia."}, {"code": "BS", "num": "44", "name": "Bahamas", "capital": "Nassau", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/bs.svg", "tier": 193, "mnemonic": "Associate Nassau directly with Bahamas.", "visual_fact": "Located in Caribbean."}, {"code": "BH", "num": "48", "name": "Bahrain", "capital": "Manama", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/bh.svg", "tier": 193, "mnemonic": "Associate Manama directly with Bahrain.", "visual_fact": "Located in Western Asia."}, {"code": "BD", "num": "50", "name": "Bangladesh", "capital": "Dhaka", "region": "Asia", "subregion": "Southern Asia", "flag": "https://flagcdn.com/bd.svg", "tier": 193, "mnemonic": "Associate Dhaka directly with Bangladesh.", "visual_fact": "Located in Southern Asia."}, {"code": "BB", "num": "52", "name": "Barbados", "capital": "Bridgetown", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/bb.svg", "tier": 193, "mnemonic": "Associate Bridgetown directly with Barbados.", "visual_fact": "Located in Caribbean."}, {"code": "BY", "num": "112", "name": "Belarus", "capital": "Minsk", "region": "Europe", "subregion": "Eastern Europe", "flag": "https://flagcdn.com/by.svg", "tier": 193, "mnemonic": "Associate Minsk directly with Belarus.", "visual_fact": "Located in Eastern Europe."}, {"code": "BE", "num": "56", "name": "Belgium", "capital": "Brussels", "region": "Europe", "subregion": "Western Europe", "flag": "https://flagcdn.com/be.svg", "tier": 193, "mnemonic": "Associate Brussels directly with Belgium.", "visual_fact": "Located in Western Europe."}, {"code": "BZ", "num": "84", "name": "Belize", "capital": "Belmopan", "region": "Americas", "subregion": "Central America", "flag": "https://flagcdn.com/bz.svg", "tier": 193, "mnemonic": "Associate Belmopan directly with Belize.", "visual_fact": "Located in Central America."}, {"code": "BJ", "num": "204", "name": "Benin", "capital": "Porto-Novo", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/bj.svg", "tier": 193, "mnemonic": "Associate Porto-Novo directly with Benin.", "visual_fact": "Located in Western Africa."}, {"code": "BM", "num": "60", "name": "Bermuda", "capital": "Hamilton", "region": "Americas", "subregion": "North America", "flag": "https://flagcdn.com/bm.svg", "tier": 245, "mnemonic": "Associate Hamilton directly with Bermuda.", "visual_fact": "Located in North America."}, {"code": "BT", "num": "64", "name": "Bhutan", "capital": "Thimphu", "region": "Asia", "subregion": "Southern Asia", "flag": "https://flagcdn.com/bt.svg", "tier": 193, "mnemonic": "Associate Thimphu directly with Bhutan.", "visual_fact": "Located in Southern Asia."}, {"code": "BO", "num": "68", "name": "Bolivia", "capital": "Sucre", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/bo.svg", "tier": 193, "mnemonic": "Associate Sucre directly with Bolivia.", "visual_fact": "Located in South America."}, {"code": "BA", "num": "70", "name": "Bosnia and Herzegovina", "capital": "Sarajevo", "region": "Europe", "subregion": "Southeast Europe", "flag": "https://flagcdn.com/ba.svg", "tier": 193, "mnemonic": "Associate Sarajevo directly with Bosnia and Herzegovina.", "visual_fact": "Located in Southeast Europe."}, {"code": "BW", "num": "72", "name": "Botswana", "capital": "Gaborone", "region": "Africa", "subregion": "Southern Africa", "flag": "https://flagcdn.com/bw.svg", "tier": 193, "mnemonic": "Associate Gaborone directly with Botswana.", "visual_fact": "Located in Southern Africa."}, {"code": "BR", "num": "76", "name": "Brazil", "capital": "Bras\u00edlia", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/br.svg", "tier": 193, "mnemonic": "Associate Bras\u00edlia directly with Brazil.", "visual_fact": "Located in South America."}, {"code": "IO", "num": "86", "name": "British Indian Ocean Territory", "capital": "Diego Garcia", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/io.svg", "tier": 245, "mnemonic": "Associate Diego Garcia directly with British Indian Ocean Territory.", "visual_fact": "Located in Eastern Africa."}, {"code": "VG", "num": "92", "name": "British Virgin Islands", "capital": "Road Town", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/vg.svg", "tier": 245, "mnemonic": "Associate Road Town directly with British Virgin Islands.", "visual_fact": "Located in Caribbean."}, {"code": "BN", "num": "96", "name": "Brunei", "capital": "Bandar Seri Begawan", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/bn.svg", "tier": 193, "mnemonic": "Associate Bandar Seri Begawan directly with Brunei.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "BG", "num": "100", "name": "Bulgaria", "capital": "Sofia", "region": "Europe", "subregion": "Southeast Europe", "flag": "https://flagcdn.com/bg.svg", "tier": 193, "mnemonic": "Associate Sofia directly with Bulgaria.", "visual_fact": "Located in Southeast Europe."}, {"code": "BF", "num": "854", "name": "Burkina Faso", "capital": "Ouagadougou", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/bf.svg", "tier": 193, "mnemonic": "Associate Ouagadougou directly with Burkina Faso.", "visual_fact": "Located in Western Africa."}, {"code": "BI", "num": "108", "name": "Burundi", "capital": "Gitega", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/bi.svg", "tier": 193, "mnemonic": "Associate Gitega directly with Burundi.", "visual_fact": "Located in Eastern Africa."}, {"code": "KH", "num": "116", "name": "Cambodia", "capital": "Phnom Penh", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/kh.svg", "tier": 193, "mnemonic": "Associate Phnom Penh directly with Cambodia.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "CM", "num": "120", "name": "Cameroon", "capital": "Yaound\u00e9", "region": "Africa", "subregion": "Middle Africa", "flag": "https://flagcdn.com/cm.svg", "tier": 193, "mnemonic": "Associate Yaound\u00e9 directly with Cameroon.", "visual_fact": "Located in Middle Africa."}, {"code": "CA", "num": "124", "name": "Canada", "capital": "Ottawa", "region": "Americas", "subregion": "North America", "flag": "https://flagcdn.com/ca.svg", "tier": 193, "mnemonic": "Associate Ottawa directly with Canada.", "visual_fact": "Located in North America."}, {"code": "CV", "num": "132", "name": "Cape Verde", "capital": "Praia", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/cv.svg", "tier": 193, "mnemonic": "Associate Praia directly with Cape Verde.", "visual_fact": "Located in Western Africa."}, {"code": "BQ", "num": "535", "name": "Caribbean Netherlands", "capital": "Kralendijk", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/bq.svg", "tier": 245, "mnemonic": "Associate Kralendijk directly with Caribbean Netherlands.", "visual_fact": "Located in Caribbean."}, {"code": "KY", "num": "136", "name": "Cayman Islands", "capital": "George Town", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/ky.svg", "tier": 245, "mnemonic": "Associate George Town directly with Cayman Islands.", "visual_fact": "Located in Caribbean."}, {"code": "CF", "num": "140", "name": "Central African Republic", "capital": "Bangui", "region": "Africa", "subregion": "Middle Africa", "flag": "https://flagcdn.com/cf.svg", "tier": 193, "mnemonic": "Associate Bangui directly with Central African Republic.", "visual_fact": "Located in Middle Africa."}, {"code": "TD", "num": "148", "name": "Chad", "capital": "N'Djamena", "region": "Africa", "subregion": "Middle Africa", "flag": "https://flagcdn.com/td.svg", "tier": 193, "mnemonic": "Associate N'Djamena directly with Chad.", "visual_fact": "Located in Middle Africa."}, {"code": "CL", "num": "152", "name": "Chile", "capital": "Santiago", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/cl.svg", "tier": 193, "mnemonic": "Associate Santiago directly with Chile.", "visual_fact": "Located in South America."}, {"code": "CN", "num": "156", "name": "China", "capital": "Beijing", "region": "Asia", "subregion": "Eastern Asia", "flag": "https://flagcdn.com/cn.svg", "tier": 193, "mnemonic": "Associate Beijing directly with China.", "visual_fact": "Located in Eastern Asia."}, {"code": "CX", "num": "162", "name": "Christmas Island", "capital": "Flying Fish Cove", "region": "Oceania", "subregion": "Australia and New Zealand", "flag": "https://flagcdn.com/cx.svg", "tier": 245, "mnemonic": "Associate Flying Fish Cove directly with Christmas Island.", "visual_fact": "Located in Australia and New Zealand."}, {"code": "CC", "num": "166", "name": "Cocos (Keeling) Islands", "capital": "West Island", "region": "Oceania", "subregion": "Australia and New Zealand", "flag": "https://flagcdn.com/cc.svg", "tier": 245, "mnemonic": "Associate West Island directly with Cocos (Keeling) Islands.", "visual_fact": "Located in Australia and New Zealand."}, {"code": "CO", "num": "170", "name": "Colombia", "capital": "Bogot\u00e1", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/co.svg", "tier": 193, "mnemonic": "Associate Bogot\u00e1 directly with Colombia.", "visual_fact": "Located in South America."}, {"code": "KM", "num": "174", "name": "Comoros", "capital": "Moroni", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/km.svg", "tier": 193, "mnemonic": "Associate Moroni directly with Comoros.", "visual_fact": "Located in Eastern Africa."}, {"code": "CG", "num": "178", "name": "Congo", "capital": "Brazzaville", "region": "Africa", "subregion": "Middle Africa", "flag": "https://flagcdn.com/cg.svg", "tier": 193, "mnemonic": "Associate Brazzaville directly with Congo.", "visual_fact": "Located in Middle Africa."}, {"code": "CK", "num": "184", "name": "Cook Islands", "capital": "Avarua", "region": "Oceania", "subregion": "Polynesia", "flag": "https://flagcdn.com/ck.svg", "tier": 245, "mnemonic": "Associate Avarua directly with Cook Islands.", "visual_fact": "Located in Polynesia."}, {"code": "CR", "num": "188", "name": "Costa Rica", "capital": "San Jos\u00e9", "region": "Americas", "subregion": "Central America", "flag": "https://flagcdn.com/cr.svg", "tier": 193, "mnemonic": "Associate San Jos\u00e9 directly with Costa Rica.", "visual_fact": "Located in Central America."}, {"code": "HR", "num": "191", "name": "Croatia", "capital": "Zagreb", "region": "Europe", "subregion": "Southeast Europe", "flag": "https://flagcdn.com/hr.svg", "tier": 193, "mnemonic": "Associate Zagreb directly with Croatia.", "visual_fact": "Located in Southeast Europe."}, {"code": "CU", "num": "192", "name": "Cuba", "capital": "Havana", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/cu.svg", "tier": 193, "mnemonic": "Associate Havana directly with Cuba.", "visual_fact": "Located in Caribbean."}, {"code": "CW", "num": "531", "name": "Cura\u00e7ao", "capital": "Willemstad", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/cw.svg", "tier": 245, "mnemonic": "Associate Willemstad directly with Cura\u00e7ao.", "visual_fact": "Located in Caribbean."}, {"code": "CY", "num": "196", "name": "Cyprus", "capital": "Nicosia", "region": "Europe", "subregion": "Southern Europe", "flag": "https://flagcdn.com/cy.svg", "tier": 193, "mnemonic": "Associate Nicosia directly with Cyprus.", "visual_fact": "Located in Southern Europe."}, {"code": "CZ", "num": "203", "name": "Czechia", "capital": "Prague", "region": "Europe", "subregion": "Central Europe", "flag": "https://flagcdn.com/cz.svg", "tier": 193, "mnemonic": "Associate Prague directly with Czechia.", "visual_fact": "Located in Central Europe."}, {"code": "CD", "num": "180", "name": "DR Congo", "capital": "Kinshasa", "region": "Africa", "subregion": "Middle Africa", "flag": "https://flagcdn.com/cd.svg", "tier": 193, "mnemonic": "Associate Kinshasa directly with DR Congo.", "visual_fact": "Located in Middle Africa."}, {"code": "DK", "num": "208", "name": "Denmark", "capital": "Copenhagen", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/dk.svg", "tier": 193, "mnemonic": "Associate Copenhagen directly with Denmark.", "visual_fact": "Located in Northern Europe."}, {"code": "DJ", "num": "262", "name": "Djibouti", "capital": "Djibouti", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/dj.svg", "tier": 193, "mnemonic": "Associate Djibouti directly with Djibouti.", "visual_fact": "Located in Eastern Africa."}, {"code": "DM", "num": "212", "name": "Dominica", "capital": "Roseau", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/dm.svg", "tier": 193, "mnemonic": "Associate Roseau directly with Dominica.", "visual_fact": "Located in Caribbean."}, {"code": "DO", "num": "214", "name": "Dominican Republic", "capital": "Santo Domingo", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/do.svg", "tier": 193, "mnemonic": "Associate Santo Domingo directly with Dominican Republic.", "visual_fact": "Located in Caribbean."}, {"code": "EC", "num": "218", "name": "Ecuador", "capital": "Quito", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/ec.svg", "tier": 193, "mnemonic": "Associate Quito directly with Ecuador.", "visual_fact": "Located in South America."}, {"code": "EG", "num": "818", "name": "Egypt", "capital": "Cairo", "region": "Africa", "subregion": "Northern Africa", "flag": "https://flagcdn.com/eg.svg", "tier": 193, "mnemonic": "Associate Cairo directly with Egypt.", "visual_fact": "Located in Northern Africa."}, {"code": "SV", "num": "222", "name": "El Salvador", "capital": "San Salvador", "region": "Americas", "subregion": "Central America", "flag": "https://flagcdn.com/sv.svg", "tier": 193, "mnemonic": "Associate San Salvador directly with El Salvador.", "visual_fact": "Located in Central America."}, {"code": "GQ", "num": "226", "name": "Equatorial Guinea", "capital": "Malabo", "region": "Africa", "subregion": "Middle Africa", "flag": "https://flagcdn.com/gq.svg", "tier": 193, "mnemonic": "Associate Malabo directly with Equatorial Guinea.", "visual_fact": "Located in Middle Africa."}, {"code": "ER", "num": "232", "name": "Eritrea", "capital": "Asmara", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/er.svg", "tier": 193, "mnemonic": "Associate Asmara directly with Eritrea.", "visual_fact": "Located in Eastern Africa."}, {"code": "EE", "num": "233", "name": "Estonia", "capital": "Tallinn", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/ee.svg", "tier": 193, "mnemonic": "Associate Tallinn directly with Estonia.", "visual_fact": "Located in Northern Europe."}, {"code": "SZ", "num": "748", "name": "Eswatini", "capital": "Lobamba", "region": "Africa", "subregion": "Southern Africa", "flag": "https://flagcdn.com/sz.svg", "tier": 193, "mnemonic": "Associate Lobamba directly with Eswatini.", "visual_fact": "Located in Southern Africa."}, {"code": "ET", "num": "231", "name": "Ethiopia", "capital": "Addis Ababa", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/et.svg", "tier": 193, "mnemonic": "Associate Addis Ababa directly with Ethiopia.", "visual_fact": "Located in Eastern Africa."}, {"code": "FK", "num": "238", "name": "Falkland Islands", "capital": "Stanley", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/fk.svg", "tier": 245, "mnemonic": "Associate Stanley directly with Falkland Islands.", "visual_fact": "Located in South America."}, {"code": "FO", "num": "234", "name": "Faroe Islands", "capital": "T\u00f3rshavn", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/fo.svg", "tier": 245, "mnemonic": "Associate T\u00f3rshavn directly with Faroe Islands.", "visual_fact": "Located in Northern Europe."}, {"code": "FJ", "num": "242", "name": "Fiji", "capital": "Suva", "region": "Oceania", "subregion": "Melanesia", "flag": "https://flagcdn.com/fj.svg", "tier": 193, "mnemonic": "Associate Suva directly with Fiji.", "visual_fact": "Located in Melanesia."}, {"code": "FI", "num": "246", "name": "Finland", "capital": "Helsinki", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/fi.svg", "tier": 193, "mnemonic": "Associate Helsinki directly with Finland.", "visual_fact": "Located in Northern Europe."}, {"code": "FR", "num": "250", "name": "France", "capital": "Paris", "region": "Europe", "subregion": "Western Europe", "flag": "https://flagcdn.com/fr.svg", "tier": 193, "mnemonic": "Associate Paris directly with France.", "visual_fact": "Located in Western Europe."}, {"code": "GF", "num": "254", "name": "French Guiana", "capital": "Cayenne", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/gf.svg", "tier": 245, "mnemonic": "Associate Cayenne directly with French Guiana.", "visual_fact": "Located in South America."}, {"code": "PF", "num": "258", "name": "French Polynesia", "capital": "Papeet\u0113", "region": "Oceania", "subregion": "Polynesia", "flag": "https://flagcdn.com/pf.svg", "tier": 245, "mnemonic": "Associate Papeet\u0113 directly with French Polynesia.", "visual_fact": "Located in Polynesia."}, {"code": "TF", "num": "260", "name": "French Southern and Antarctic Lands", "capital": "Port-aux-Fran\u00e7ais", "region": "Antarctic", "subregion": "", "flag": "https://flagcdn.com/tf.svg", "tier": 245, "mnemonic": "Associate Port-aux-Fran\u00e7ais directly with French Southern and Antarctic Lands.", "visual_fact": "Located in ."}, {"code": "GA", "num": "266", "name": "Gabon", "capital": "Libreville", "region": "Africa", "subregion": "Middle Africa", "flag": "https://flagcdn.com/ga.svg", "tier": 193, "mnemonic": "Associate Libreville directly with Gabon.", "visual_fact": "Located in Middle Africa."}, {"code": "GM", "num": "270", "name": "Gambia", "capital": "Banjul", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/gm.svg", "tier": 193, "mnemonic": "Associate Banjul directly with Gambia.", "visual_fact": "Located in Western Africa."}, {"code": "GE", "num": "268", "name": "Georgia", "capital": "Tbilisi", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/ge.svg", "tier": 193, "mnemonic": "Associate Tbilisi directly with Georgia.", "visual_fact": "Located in Western Asia."}, {"code": "DE", "num": "276", "name": "Germany", "capital": "Berlin", "region": "Europe", "subregion": "Western Europe", "flag": "https://flagcdn.com/de.svg", "tier": 193, "mnemonic": "Associate Berlin directly with Germany.", "visual_fact": "Located in Western Europe."}, {"code": "GH", "num": "288", "name": "Ghana", "capital": "Accra", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/gh.svg", "tier": 193, "mnemonic": "Associate Accra directly with Ghana.", "visual_fact": "Located in Western Africa."}, {"code": "GI", "num": "292", "name": "Gibraltar", "capital": "Gibraltar", "region": "Europe", "subregion": "Southern Europe", "flag": "https://flagcdn.com/gi.svg", "tier": 245, "mnemonic": "Associate Gibraltar directly with Gibraltar.", "visual_fact": "Located in Southern Europe."}, {"code": "GR", "num": "300", "name": "Greece", "capital": "Athens", "region": "Europe", "subregion": "Southern Europe", "flag": "https://flagcdn.com/gr.svg", "tier": 193, "mnemonic": "Associate Athens directly with Greece.", "visual_fact": "Located in Southern Europe."}, {"code": "GL", "num": "304", "name": "Greenland", "capital": "Nuuk", "region": "Americas", "subregion": "North America", "flag": "https://flagcdn.com/gl.svg", "tier": 245, "mnemonic": "Associate Nuuk directly with Greenland.", "visual_fact": "Located in North America."}, {"code": "GD", "num": "308", "name": "Grenada", "capital": "St. George's", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/gd.svg", "tier": 193, "mnemonic": "Associate St. George's directly with Grenada.", "visual_fact": "Located in Caribbean."}, {"code": "GP", "num": "312", "name": "Guadeloupe", "capital": "Basse-Terre", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/gp.svg", "tier": 245, "mnemonic": "Associate Basse-Terre directly with Guadeloupe.", "visual_fact": "Located in Caribbean."}, {"code": "GU", "num": "316", "name": "Guam", "capital": "Hag\u00e5t\u00f1a", "region": "Oceania", "subregion": "Micronesia", "flag": "https://flagcdn.com/gu.svg", "tier": 245, "mnemonic": "Associate Hag\u00e5t\u00f1a directly with Guam.", "visual_fact": "Located in Micronesia."}, {"code": "GT", "num": "320", "name": "Guatemala", "capital": "Guatemala City", "region": "Americas", "subregion": "Central America", "flag": "https://flagcdn.com/gt.svg", "tier": 193, "mnemonic": "Associate Guatemala City directly with Guatemala.", "visual_fact": "Located in Central America."}, {"code": "GG", "num": "831", "name": "Guernsey", "capital": "St. Peter Port", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/gg.svg", "tier": 245, "mnemonic": "Associate St. Peter Port directly with Guernsey.", "visual_fact": "Located in Northern Europe."}, {"code": "GN", "num": "324", "name": "Guinea", "capital": "Conakry", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/gn.svg", "tier": 193, "mnemonic": "Associate Conakry directly with Guinea.", "visual_fact": "Located in Western Africa."}, {"code": "GW", "num": "624", "name": "Guinea-Bissau", "capital": "Bissau", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/gw.svg", "tier": 193, "mnemonic": "Associate Bissau directly with Guinea-Bissau.", "visual_fact": "Located in Western Africa."}, {"code": "GY", "num": "328", "name": "Guyana", "capital": "Georgetown", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/gy.svg", "tier": 193, "mnemonic": "Associate Georgetown directly with Guyana.", "visual_fact": "Located in South America."}, {"code": "HT", "num": "332", "name": "Haiti", "capital": "Port-au-Prince", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/ht.svg", "tier": 193, "mnemonic": "Associate Port-au-Prince directly with Haiti.", "visual_fact": "Located in Caribbean."}, {"code": "HN", "num": "340", "name": "Honduras", "capital": "Tegucigalpa", "region": "Americas", "subregion": "Central America", "flag": "https://flagcdn.com/hn.svg", "tier": 193, "mnemonic": "Associate Tegucigalpa directly with Honduras.", "visual_fact": "Located in Central America."}, {"code": "HK", "num": "344", "name": "Hong Kong", "capital": "City of Victoria", "region": "Asia", "subregion": "Eastern Asia", "flag": "https://flagcdn.com/hk.svg", "tier": 245, "mnemonic": "Associate City of Victoria directly with Hong Kong.", "visual_fact": "Located in Eastern Asia."}, {"code": "HU", "num": "348", "name": "Hungary", "capital": "Budapest", "region": "Europe", "subregion": "Central Europe", "flag": "https://flagcdn.com/hu.svg", "tier": 193, "mnemonic": "Associate Budapest directly with Hungary.", "visual_fact": "Located in Central Europe."}, {"code": "IS", "num": "352", "name": "Iceland", "capital": "Reykjavik", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/is.svg", "tier": 193, "mnemonic": "Associate Reykjavik directly with Iceland.", "visual_fact": "Located in Northern Europe."}, {"code": "IN", "num": "356", "name": "India", "capital": "New Delhi", "region": "Asia", "subregion": "Southern Asia", "flag": "https://flagcdn.com/in.svg", "tier": 193, "mnemonic": "Associate New Delhi directly with India.", "visual_fact": "Located in Southern Asia."}, {"code": "ID", "num": "360", "name": "Indonesia", "capital": "Jakarta", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/id.svg", "tier": 193, "mnemonic": "Associate Jakarta directly with Indonesia.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "IR", "num": "364", "name": "Iran", "capital": "Tehran", "region": "Asia", "subregion": "Southern Asia", "flag": "https://flagcdn.com/ir.svg", "tier": 193, "mnemonic": "Associate Tehran directly with Iran.", "visual_fact": "Located in Southern Asia."}, {"code": "IQ", "num": "368", "name": "Iraq", "capital": "Baghdad", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/iq.svg", "tier": 193, "mnemonic": "Associate Baghdad directly with Iraq.", "visual_fact": "Located in Western Asia."}, {"code": "IE", "num": "372", "name": "Ireland", "capital": "Dublin", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/ie.svg", "tier": 193, "mnemonic": "Associate Dublin directly with Ireland.", "visual_fact": "Located in Northern Europe."}, {"code": "IM", "num": "833", "name": "Isle of Man", "capital": "Douglas", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/im.svg", "tier": 245, "mnemonic": "Associate Douglas directly with Isle of Man.", "visual_fact": "Located in Northern Europe."}, {"code": "IL", "num": "376", "name": "Israel", "capital": "Jerusalem", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/il.svg", "tier": 193, "mnemonic": "Associate Jerusalem directly with Israel.", "visual_fact": "Located in Western Asia."}, {"code": "IT", "num": "380", "name": "Italy", "capital": "Rome", "region": "Europe", "subregion": "Southern Europe", "flag": "https://flagcdn.com/it.svg", "tier": 193, "mnemonic": "Associate Rome directly with Italy.", "visual_fact": "Located in Southern Europe."}, {"code": "CI", "num": "384", "name": "Ivory Coast", "capital": "Yamoussoukro", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/ci.svg", "tier": 193, "mnemonic": "Associate Yamoussoukro directly with Ivory Coast.", "visual_fact": "Located in Western Africa."}, {"code": "JM", "num": "388", "name": "Jamaica", "capital": "Kingston", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/jm.svg", "tier": 193, "mnemonic": "Associate Kingston directly with Jamaica.", "visual_fact": "Located in Caribbean."}, {"code": "JP", "num": "392", "name": "Japan", "capital": "Tokyo", "region": "Asia", "subregion": "Eastern Asia", "flag": "https://flagcdn.com/jp.svg", "tier": 193, "mnemonic": "Associate Tokyo directly with Japan.", "visual_fact": "Located in Eastern Asia."}, {"code": "JE", "num": "832", "name": "Jersey", "capital": "Saint Helier", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/je.svg", "tier": 245, "mnemonic": "Associate Saint Helier directly with Jersey.", "visual_fact": "Located in Northern Europe."}, {"code": "JO", "num": "400", "name": "Jordan", "capital": "Amman", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/jo.svg", "tier": 193, "mnemonic": "Associate Amman directly with Jordan.", "visual_fact": "Located in Western Asia."}, {"code": "KZ", "num": "398", "name": "Kazakhstan", "capital": "Astana", "region": "Asia", "subregion": "Central Asia", "flag": "https://flagcdn.com/kz.svg", "tier": 193, "mnemonic": "Associate Astana directly with Kazakhstan.", "visual_fact": "Located in Central Asia."}, {"code": "KE", "num": "404", "name": "Kenya", "capital": "Nairobi", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/ke.svg", "tier": 193, "mnemonic": "Associate Nairobi directly with Kenya.", "visual_fact": "Located in Eastern Africa."}, {"code": "KI", "num": "296", "name": "Kiribati", "capital": "South Tarawa", "region": "Oceania", "subregion": "Micronesia", "flag": "https://flagcdn.com/ki.svg", "tier": 193, "mnemonic": "Associate South Tarawa directly with Kiribati.", "visual_fact": "Located in Micronesia."}, {"code": "KW", "num": "414", "name": "Kuwait", "capital": "Kuwait City", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/kw.svg", "tier": 193, "mnemonic": "Associate Kuwait City directly with Kuwait.", "visual_fact": "Located in Western Asia."}, {"code": "KG", "num": "417", "name": "Kyrgyzstan", "capital": "Bishkek", "region": "Asia", "subregion": "Central Asia", "flag": "https://flagcdn.com/kg.svg", "tier": 193, "mnemonic": "Associate Bishkek directly with Kyrgyzstan.", "visual_fact": "Located in Central Asia."}, {"code": "LA", "num": "418", "name": "Laos", "capital": "Vientiane", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/la.svg", "tier": 193, "mnemonic": "Associate Vientiane directly with Laos.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "LV", "num": "428", "name": "Latvia", "capital": "Riga", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/lv.svg", "tier": 193, "mnemonic": "Associate Riga directly with Latvia.", "visual_fact": "Located in Northern Europe."}, {"code": "LB", "num": "422", "name": "Lebanon", "capital": "Beirut", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/lb.svg", "tier": 193, "mnemonic": "Associate Beirut directly with Lebanon.", "visual_fact": "Located in Western Asia."}, {"code": "LS", "num": "426", "name": "Lesotho", "capital": "Maseru", "region": "Africa", "subregion": "Southern Africa", "flag": "https://flagcdn.com/ls.svg", "tier": 193, "mnemonic": "Associate Maseru directly with Lesotho.", "visual_fact": "Located in Southern Africa."}, {"code": "LR", "num": "430", "name": "Liberia", "capital": "Monrovia", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/lr.svg", "tier": 193, "mnemonic": "Associate Monrovia directly with Liberia.", "visual_fact": "Located in Western Africa."}, {"code": "LY", "num": "434", "name": "Libya", "capital": "Tripoli", "region": "Africa", "subregion": "Northern Africa", "flag": "https://flagcdn.com/ly.svg", "tier": 193, "mnemonic": "Associate Tripoli directly with Libya.", "visual_fact": "Located in Northern Africa."}, {"code": "LI", "num": "438", "name": "Liechtenstein", "capital": "Vaduz", "region": "Europe", "subregion": "Western Europe", "flag": "https://flagcdn.com/li.svg", "tier": 193, "mnemonic": "Associate Vaduz directly with Liechtenstein.", "visual_fact": "Located in Western Europe."}, {"code": "LT", "num": "440", "name": "Lithuania", "capital": "Vilnius", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/lt.svg", "tier": 193, "mnemonic": "Associate Vilnius directly with Lithuania.", "visual_fact": "Located in Northern Europe."}, {"code": "LU", "num": "442", "name": "Luxembourg", "capital": "Luxembourg", "region": "Europe", "subregion": "Western Europe", "flag": "https://flagcdn.com/lu.svg", "tier": 193, "mnemonic": "Associate Luxembourg directly with Luxembourg.", "visual_fact": "Located in Western Europe."}, {"code": "MG", "num": "450", "name": "Madagascar", "capital": "Antananarivo", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/mg.svg", "tier": 193, "mnemonic": "Associate Antananarivo directly with Madagascar.", "visual_fact": "Located in Eastern Africa."}, {"code": "MW", "num": "454", "name": "Malawi", "capital": "Lilongwe", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/mw.svg", "tier": 193, "mnemonic": "Associate Lilongwe directly with Malawi.", "visual_fact": "Located in Eastern Africa."}, {"code": "MY", "num": "458", "name": "Malaysia", "capital": "Kuala Lumpur", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/my.svg", "tier": 193, "mnemonic": "Associate Kuala Lumpur directly with Malaysia.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "MV", "num": "462", "name": "Maldives", "capital": "Mal\u00e9", "region": "Asia", "subregion": "Southern Asia", "flag": "https://flagcdn.com/mv.svg", "tier": 193, "mnemonic": "Associate Mal\u00e9 directly with Maldives.", "visual_fact": "Located in Southern Asia."}, {"code": "ML", "num": "466", "name": "Mali", "capital": "Bamako", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/ml.svg", "tier": 193, "mnemonic": "Associate Bamako directly with Mali.", "visual_fact": "Located in Western Africa."}, {"code": "MT", "num": "470", "name": "Malta", "capital": "Valletta", "region": "Europe", "subregion": "Southern Europe", "flag": "https://flagcdn.com/mt.svg", "tier": 193, "mnemonic": "Associate Valletta directly with Malta.", "visual_fact": "Located in Southern Europe."}, {"code": "MH", "num": "584", "name": "Marshall Islands", "capital": "Majuro", "region": "Oceania", "subregion": "Micronesia", "flag": "https://flagcdn.com/mh.svg", "tier": 193, "mnemonic": "Associate Majuro directly with Marshall Islands.", "visual_fact": "Located in Micronesia."}, {"code": "MQ", "num": "474", "name": "Martinique", "capital": "Fort-de-France", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/mq.svg", "tier": 245, "mnemonic": "Associate Fort-de-France directly with Martinique.", "visual_fact": "Located in Caribbean."}, {"code": "MR", "num": "478", "name": "Mauritania", "capital": "Nouakchott", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/mr.svg", "tier": 193, "mnemonic": "Associate Nouakchott directly with Mauritania.", "visual_fact": "Located in Western Africa."}, {"code": "MU", "num": "480", "name": "Mauritius", "capital": "Port Louis", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/mu.svg", "tier": 193, "mnemonic": "Associate Port Louis directly with Mauritius.", "visual_fact": "Located in Eastern Africa."}, {"code": "YT", "num": "175", "name": "Mayotte", "capital": "Mamoudzou", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/yt.svg", "tier": 245, "mnemonic": "Associate Mamoudzou directly with Mayotte.", "visual_fact": "Located in Eastern Africa."}, {"code": "MX", "num": "484", "name": "Mexico", "capital": "Mexico City", "region": "Americas", "subregion": "North America", "flag": "https://flagcdn.com/mx.svg", "tier": 193, "mnemonic": "Associate Mexico City directly with Mexico.", "visual_fact": "Located in North America."}, {"code": "FM", "num": "583", "name": "Micronesia", "capital": "Palikir", "region": "Oceania", "subregion": "Micronesia", "flag": "https://flagcdn.com/fm.svg", "tier": 193, "mnemonic": "Associate Palikir directly with Micronesia.", "visual_fact": "Located in Micronesia."}, {"code": "MD", "num": "498", "name": "Moldova", "capital": "Chi\u0219in\u0103u", "region": "Europe", "subregion": "Eastern Europe", "flag": "https://flagcdn.com/md.svg", "tier": 193, "mnemonic": "Associate Chi\u0219in\u0103u directly with Moldova.", "visual_fact": "Located in Eastern Europe."}, {"code": "MC", "num": "492", "name": "Monaco", "capital": "Monaco", "region": "Europe", "subregion": "Western Europe", "flag": "https://flagcdn.com/mc.svg", "tier": 193, "mnemonic": "Associate Monaco directly with Monaco.", "visual_fact": "Located in Western Europe."}, {"code": "MN", "num": "496", "name": "Mongolia", "capital": "Ulan Bator", "region": "Asia", "subregion": "Eastern Asia", "flag": "https://flagcdn.com/mn.svg", "tier": 193, "mnemonic": "Associate Ulan Bator directly with Mongolia.", "visual_fact": "Located in Eastern Asia."}, {"code": "ME", "num": "499", "name": "Montenegro", "capital": "Podgorica", "region": "Europe", "subregion": "Southeast Europe", "flag": "https://flagcdn.com/me.svg", "tier": 193, "mnemonic": "Associate Podgorica directly with Montenegro.", "visual_fact": "Located in Southeast Europe."}, {"code": "MS", "num": "500", "name": "Montserrat", "capital": "Plymouth", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/ms.svg", "tier": 245, "mnemonic": "Associate Plymouth directly with Montserrat.", "visual_fact": "Located in Caribbean."}, {"code": "MA", "num": "504", "name": "Morocco", "capital": "Rabat", "region": "Africa", "subregion": "Northern Africa", "flag": "https://flagcdn.com/ma.svg", "tier": 193, "mnemonic": "Associate Rabat directly with Morocco.", "visual_fact": "Located in Northern Africa."}, {"code": "MZ", "num": "508", "name": "Mozambique", "capital": "Maputo", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/mz.svg", "tier": 193, "mnemonic": "Associate Maputo directly with Mozambique.", "visual_fact": "Located in Eastern Africa."}, {"code": "MM", "num": "104", "name": "Myanmar", "capital": "Naypyidaw", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/mm.svg", "tier": 193, "mnemonic": "Associate Naypyidaw directly with Myanmar.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "NA", "num": "516", "name": "Namibia", "capital": "Windhoek", "region": "Africa", "subregion": "Southern Africa", "flag": "https://flagcdn.com/na.svg", "tier": 193, "mnemonic": "Associate Windhoek directly with Namibia.", "visual_fact": "Located in Southern Africa."}, {"code": "NR", "num": "520", "name": "Nauru", "capital": "Yaren", "region": "Oceania", "subregion": "Micronesia", "flag": "https://flagcdn.com/nr.svg", "tier": 193, "mnemonic": "Associate Yaren directly with Nauru.", "visual_fact": "Located in Micronesia."}, {"code": "NP", "num": "524", "name": "Nepal", "capital": "Kathmandu", "region": "Asia", "subregion": "Southern Asia", "flag": "https://flagcdn.com/np.svg", "tier": 193, "mnemonic": "Associate Kathmandu directly with Nepal.", "visual_fact": "Located in Southern Asia."}, {"code": "NL", "num": "528", "name": "Netherlands", "capital": "Amsterdam", "region": "Europe", "subregion": "Western Europe", "flag": "https://flagcdn.com/nl.svg", "tier": 193, "mnemonic": "Associate Amsterdam directly with Netherlands.", "visual_fact": "Located in Western Europe."}, {"code": "NC", "num": "540", "name": "New Caledonia", "capital": "Noum\u00e9a", "region": "Oceania", "subregion": "Melanesia", "flag": "https://flagcdn.com/nc.svg", "tier": 245, "mnemonic": "Associate Noum\u00e9a directly with New Caledonia.", "visual_fact": "Located in Melanesia."}, {"code": "NZ", "num": "554", "name": "New Zealand", "capital": "Wellington", "region": "Oceania", "subregion": "Australia and New Zealand", "flag": "https://flagcdn.com/nz.svg", "tier": 193, "mnemonic": "Associate Wellington directly with New Zealand.", "visual_fact": "Located in Australia and New Zealand."}, {"code": "NI", "num": "558", "name": "Nicaragua", "capital": "Managua", "region": "Americas", "subregion": "Central America", "flag": "https://flagcdn.com/ni.svg", "tier": 193, "mnemonic": "Associate Managua directly with Nicaragua.", "visual_fact": "Located in Central America."}, {"code": "NE", "num": "562", "name": "Niger", "capital": "Niamey", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/ne.svg", "tier": 193, "mnemonic": "Associate Niamey directly with Niger.", "visual_fact": "Located in Western Africa."}, {"code": "NG", "num": "566", "name": "Nigeria", "capital": "Abuja", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/ng.svg", "tier": 193, "mnemonic": "Associate Abuja directly with Nigeria.", "visual_fact": "Located in Western Africa."}, {"code": "NU", "num": "570", "name": "Niue", "capital": "Alofi", "region": "Oceania", "subregion": "Polynesia", "flag": "https://flagcdn.com/nu.svg", "tier": 245, "mnemonic": "Associate Alofi directly with Niue.", "visual_fact": "Located in Polynesia."}, {"code": "NF", "num": "574", "name": "Norfolk Island", "capital": "Kingston", "region": "Oceania", "subregion": "Australia and New Zealand", "flag": "https://flagcdn.com/nf.svg", "tier": 245, "mnemonic": "Associate Kingston directly with Norfolk Island.", "visual_fact": "Located in Australia and New Zealand."}, {"code": "KP", "num": "408", "name": "North Korea", "capital": "Pyongyang", "region": "Asia", "subregion": "Eastern Asia", "flag": "https://flagcdn.com/kp.svg", "tier": 193, "mnemonic": "Associate Pyongyang directly with North Korea.", "visual_fact": "Located in Eastern Asia."}, {"code": "MK", "num": "807", "name": "North Macedonia", "capital": "Skopje", "region": "Europe", "subregion": "Southeast Europe", "flag": "https://flagcdn.com/mk.svg", "tier": 193, "mnemonic": "Associate Skopje directly with North Macedonia.", "visual_fact": "Located in Southeast Europe."}, {"code": "MP", "num": "580", "name": "Northern Mariana Islands", "capital": "Saipan", "region": "Oceania", "subregion": "Micronesia", "flag": "https://flagcdn.com/mp.svg", "tier": 245, "mnemonic": "Associate Saipan directly with Northern Mariana Islands.", "visual_fact": "Located in Micronesia."}, {"code": "NO", "num": "578", "name": "Norway", "capital": "Oslo", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/no.svg", "tier": 193, "mnemonic": "Associate Oslo directly with Norway.", "visual_fact": "Located in Northern Europe."}, {"code": "OM", "num": "512", "name": "Oman", "capital": "Muscat", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/om.svg", "tier": 193, "mnemonic": "Associate Muscat directly with Oman.", "visual_fact": "Located in Western Asia."}, {"code": "PK", "num": "586", "name": "Pakistan", "capital": "Islamabad", "region": "Asia", "subregion": "Southern Asia", "flag": "https://flagcdn.com/pk.svg", "tier": 193, "mnemonic": "Associate Islamabad directly with Pakistan.", "visual_fact": "Located in Southern Asia."}, {"code": "PW", "num": "585", "name": "Palau", "capital": "Ngerulmud", "region": "Oceania", "subregion": "Micronesia", "flag": "https://flagcdn.com/pw.svg", "tier": 193, "mnemonic": "Associate Ngerulmud directly with Palau.", "visual_fact": "Located in Micronesia."}, {"code": "PS", "num": "275", "name": "Palestine", "capital": "Ramallah", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/ps.svg", "tier": 195, "mnemonic": "Associate Ramallah directly with Palestine.", "visual_fact": "Located in Western Asia."}, {"code": "PA", "num": "591", "name": "Panama", "capital": "Panama City", "region": "Americas", "subregion": "Central America", "flag": "https://flagcdn.com/pa.svg", "tier": 193, "mnemonic": "Associate Panama City directly with Panama.", "visual_fact": "Located in Central America."}, {"code": "PG", "num": "598", "name": "Papua New Guinea", "capital": "Port Moresby", "region": "Oceania", "subregion": "Melanesia", "flag": "https://flagcdn.com/pg.svg", "tier": 193, "mnemonic": "Associate Port Moresby directly with Papua New Guinea.", "visual_fact": "Located in Melanesia."}, {"code": "PY", "num": "600", "name": "Paraguay", "capital": "Asunci\u00f3n", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/py.svg", "tier": 193, "mnemonic": "Associate Asunci\u00f3n directly with Paraguay.", "visual_fact": "Located in South America."}, {"code": "PE", "num": "604", "name": "Peru", "capital": "Lima", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/pe.svg", "tier": 193, "mnemonic": "Associate Lima directly with Peru.", "visual_fact": "Located in South America."}, {"code": "PH", "num": "608", "name": "Philippines", "capital": "Manila", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/ph.svg", "tier": 193, "mnemonic": "Associate Manila directly with Philippines.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "PN", "num": "612", "name": "Pitcairn Islands", "capital": "Adamstown", "region": "Oceania", "subregion": "Polynesia", "flag": "https://flagcdn.com/pn.svg", "tier": 245, "mnemonic": "Associate Adamstown directly with Pitcairn Islands.", "visual_fact": "Located in Polynesia."}, {"code": "PL", "num": "616", "name": "Poland", "capital": "Warsaw", "region": "Europe", "subregion": "Central Europe", "flag": "https://flagcdn.com/pl.svg", "tier": 193, "mnemonic": "Associate Warsaw directly with Poland.", "visual_fact": "Located in Central Europe."}, {"code": "PT", "num": "620", "name": "Portugal", "capital": "Lisbon", "region": "Europe", "subregion": "Southern Europe", "flag": "https://flagcdn.com/pt.svg", "tier": 193, "mnemonic": "Associate Lisbon directly with Portugal.", "visual_fact": "Located in Southern Europe."}, {"code": "PR", "num": "630", "name": "Puerto Rico", "capital": "San Juan", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/pr.svg", "tier": 245, "mnemonic": "Associate San Juan directly with Puerto Rico.", "visual_fact": "Located in Caribbean."}, {"code": "QA", "num": "634", "name": "Qatar", "capital": "Doha", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/qa.svg", "tier": 193, "mnemonic": "Associate Doha directly with Qatar.", "visual_fact": "Located in Western Asia."}, {"code": "RO", "num": "642", "name": "Romania", "capital": "Bucharest", "region": "Europe", "subregion": "Southeast Europe", "flag": "https://flagcdn.com/ro.svg", "tier": 193, "mnemonic": "Associate Bucharest directly with Romania.", "visual_fact": "Located in Southeast Europe."}, {"code": "RU", "num": "643", "name": "Russia", "capital": "Moscow", "region": "Europe", "subregion": "Eastern Europe", "flag": "https://flagcdn.com/ru.svg", "tier": 193, "mnemonic": "Associate Moscow directly with Russia.", "visual_fact": "Located in Eastern Europe."}, {"code": "RW", "num": "646", "name": "Rwanda", "capital": "Kigali", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/rw.svg", "tier": 193, "mnemonic": "Associate Kigali directly with Rwanda.", "visual_fact": "Located in Eastern Africa."}, {"code": "RE", "num": "638", "name": "R\u00e9union", "capital": "Saint-Denis", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/re.svg", "tier": 245, "mnemonic": "Associate Saint-Denis directly with R\u00e9union.", "visual_fact": "Located in Eastern Africa."}, {"code": "BL", "num": "652", "name": "Saint Barth\u00e9lemy", "capital": "Gustavia", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/bl.svg", "tier": 245, "mnemonic": "Associate Gustavia directly with Saint Barth\u00e9lemy.", "visual_fact": "Located in Caribbean."}, {"code": "SH", "num": "654", "name": "Saint Helena, Ascension and Tristan da Cunha", "capital": "Jamestown", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/sh.svg", "tier": 245, "mnemonic": "Associate Jamestown directly with Saint Helena, Ascension and Tristan da Cunha.", "visual_fact": "Located in Western Africa."}, {"code": "KN", "num": "659", "name": "Saint Kitts and Nevis", "capital": "Basseterre", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/kn.svg", "tier": 193, "mnemonic": "Associate Basseterre directly with Saint Kitts and Nevis.", "visual_fact": "Located in Caribbean."}, {"code": "LC", "num": "662", "name": "Saint Lucia", "capital": "Castries", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/lc.svg", "tier": 193, "mnemonic": "Associate Castries directly with Saint Lucia.", "visual_fact": "Located in Caribbean."}, {"code": "MF", "num": "663", "name": "Saint Martin", "capital": "Marigot", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/mf.svg", "tier": 245, "mnemonic": "Associate Marigot directly with Saint Martin.", "visual_fact": "Located in Caribbean."}, {"code": "PM", "num": "666", "name": "Saint Pierre and Miquelon", "capital": "Saint-Pierre", "region": "Americas", "subregion": "North America", "flag": "https://flagcdn.com/pm.svg", "tier": 245, "mnemonic": "Associate Saint-Pierre directly with Saint Pierre and Miquelon.", "visual_fact": "Located in North America."}, {"code": "VC", "num": "670", "name": "Saint Vincent and the Grenadines", "capital": "Kingstown", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/vc.svg", "tier": 193, "mnemonic": "Associate Kingstown directly with Saint Vincent and the Grenadines.", "visual_fact": "Located in Caribbean."}, {"code": "WS", "num": "882", "name": "Samoa", "capital": "Apia", "region": "Oceania", "subregion": "Polynesia", "flag": "https://flagcdn.com/ws.svg", "tier": 193, "mnemonic": "Associate Apia directly with Samoa.", "visual_fact": "Located in Polynesia."}, {"code": "SM", "num": "674", "name": "San Marino", "capital": "City of San Marino", "region": "Europe", "subregion": "Southern Europe", "flag": "https://flagcdn.com/sm.svg", "tier": 193, "mnemonic": "Associate City of San Marino directly with San Marino.", "visual_fact": "Located in Southern Europe."}, {"code": "SA", "num": "682", "name": "Saudi Arabia", "capital": "Riyadh", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/sa.svg", "tier": 193, "mnemonic": "Associate Riyadh directly with Saudi Arabia.", "visual_fact": "Located in Western Asia."}, {"code": "SN", "num": "686", "name": "Senegal", "capital": "Dakar", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/sn.svg", "tier": 193, "mnemonic": "Associate Dakar directly with Senegal.", "visual_fact": "Located in Western Africa."}, {"code": "RS", "num": "688", "name": "Serbia", "capital": "Belgrade", "region": "Europe", "subregion": "Southeast Europe", "flag": "https://flagcdn.com/rs.svg", "tier": 193, "mnemonic": "Associate Belgrade directly with Serbia.", "visual_fact": "Located in Southeast Europe."}, {"code": "SC", "num": "690", "name": "Seychelles", "capital": "Victoria", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/sc.svg", "tier": 193, "mnemonic": "Associate Victoria directly with Seychelles.", "visual_fact": "Located in Eastern Africa."}, {"code": "SL", "num": "694", "name": "Sierra Leone", "capital": "Freetown", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/sl.svg", "tier": 193, "mnemonic": "Associate Freetown directly with Sierra Leone.", "visual_fact": "Located in Western Africa."}, {"code": "SG", "num": "702", "name": "Singapore", "capital": "Singapore", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/sg.svg", "tier": 193, "mnemonic": "Associate Singapore directly with Singapore.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "SX", "num": "534", "name": "Sint Maarten", "capital": "Philipsburg", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/sx.svg", "tier": 245, "mnemonic": "Associate Philipsburg directly with Sint Maarten.", "visual_fact": "Located in Caribbean."}, {"code": "SK", "num": "703", "name": "Slovakia", "capital": "Bratislava", "region": "Europe", "subregion": "Central Europe", "flag": "https://flagcdn.com/sk.svg", "tier": 193, "mnemonic": "Associate Bratislava directly with Slovakia.", "visual_fact": "Located in Central Europe."}, {"code": "SI", "num": "705", "name": "Slovenia", "capital": "Ljubljana", "region": "Europe", "subregion": "Central Europe", "flag": "https://flagcdn.com/si.svg", "tier": 193, "mnemonic": "Associate Ljubljana directly with Slovenia.", "visual_fact": "Located in Central Europe."}, {"code": "SB", "num": "90", "name": "Solomon Islands", "capital": "Honiara", "region": "Oceania", "subregion": "Melanesia", "flag": "https://flagcdn.com/sb.svg", "tier": 193, "mnemonic": "Associate Honiara directly with Solomon Islands.", "visual_fact": "Located in Melanesia."}, {"code": "SO", "num": "706", "name": "Somalia", "capital": "Mogadishu", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/so.svg", "tier": 193, "mnemonic": "Associate Mogadishu directly with Somalia.", "visual_fact": "Located in Eastern Africa."}, {"code": "ZA", "num": "710", "name": "South Africa", "capital": "Pretoria", "region": "Africa", "subregion": "Southern Africa", "flag": "https://flagcdn.com/za.svg", "tier": 193, "mnemonic": "Associate Pretoria directly with South Africa.", "visual_fact": "Located in Southern Africa."}, {"code": "GS", "num": "239", "name": "South Georgia", "capital": "King Edward Point", "region": "Antarctic", "subregion": "", "flag": "https://flagcdn.com/gs.svg", "tier": 245, "mnemonic": "Associate King Edward Point directly with South Georgia.", "visual_fact": "Located in ."}, {"code": "KR", "num": "410", "name": "South Korea", "capital": "Seoul", "region": "Asia", "subregion": "Eastern Asia", "flag": "https://flagcdn.com/kr.svg", "tier": 193, "mnemonic": "Associate Seoul directly with South Korea.", "visual_fact": "Located in Eastern Asia."}, {"code": "SS", "num": "728", "name": "South Sudan", "capital": "Juba", "region": "Africa", "subregion": "Middle Africa", "flag": "https://flagcdn.com/ss.svg", "tier": 193, "mnemonic": "Associate Juba directly with South Sudan.", "visual_fact": "Located in Middle Africa."}, {"code": "ES", "num": "724", "name": "Spain", "capital": "Madrid", "region": "Europe", "subregion": "Southern Europe", "flag": "https://flagcdn.com/es.svg", "tier": 193, "mnemonic": "Associate Madrid directly with Spain.", "visual_fact": "Located in Southern Europe."}, {"code": "LK", "num": "144", "name": "Sri Lanka", "capital": "Colombo", "region": "Asia", "subregion": "Southern Asia", "flag": "https://flagcdn.com/lk.svg", "tier": 193, "mnemonic": "Associate Colombo directly with Sri Lanka.", "visual_fact": "Located in Southern Asia."}, {"code": "SD", "num": "729", "name": "Sudan", "capital": "Khartoum", "region": "Africa", "subregion": "Northern Africa", "flag": "https://flagcdn.com/sd.svg", "tier": 193, "mnemonic": "Associate Khartoum directly with Sudan.", "visual_fact": "Located in Northern Africa."}, {"code": "SR", "num": "740", "name": "Suriname", "capital": "Paramaribo", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/sr.svg", "tier": 193, "mnemonic": "Associate Paramaribo directly with Suriname.", "visual_fact": "Located in South America."}, {"code": "SJ", "num": "744", "name": "Svalbard and Jan Mayen", "capital": "Longyearbyen", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/sj.svg", "tier": 245, "mnemonic": "Associate Longyearbyen directly with Svalbard and Jan Mayen.", "visual_fact": "Located in Northern Europe."}, {"code": "SE", "num": "752", "name": "Sweden", "capital": "Stockholm", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/se.svg", "tier": 193, "mnemonic": "Associate Stockholm directly with Sweden.", "visual_fact": "Located in Northern Europe."}, {"code": "CH", "num": "756", "name": "Switzerland", "capital": "Bern", "region": "Europe", "subregion": "Western Europe", "flag": "https://flagcdn.com/ch.svg", "tier": 193, "mnemonic": "Associate Bern directly with Switzerland.", "visual_fact": "Located in Western Europe."}, {"code": "SY", "num": "760", "name": "Syria", "capital": "Damascus", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/sy.svg", "tier": 193, "mnemonic": "Associate Damascus directly with Syria.", "visual_fact": "Located in Western Asia."}, {"code": "ST", "num": "678", "name": "S\u00e3o Tom\u00e9 and Pr\u00edncipe", "capital": "S\u00e3o Tom\u00e9", "region": "Africa", "subregion": "Middle Africa", "flag": "https://flagcdn.com/st.svg", "tier": 193, "mnemonic": "Associate S\u00e3o Tom\u00e9 directly with S\u00e3o Tom\u00e9 and Pr\u00edncipe.", "visual_fact": "Located in Middle Africa."}, {"code": "TW", "num": "158", "name": "Taiwan", "capital": "Taipei", "region": "Asia", "subregion": "Eastern Asia", "flag": "https://flagcdn.com/tw.svg", "tier": 200, "mnemonic": "Associate Taipei directly with Taiwan.", "visual_fact": "Located in Eastern Asia."}, {"code": "TJ", "num": "762", "name": "Tajikistan", "capital": "Dushanbe", "region": "Asia", "subregion": "Central Asia", "flag": "https://flagcdn.com/tj.svg", "tier": 193, "mnemonic": "Associate Dushanbe directly with Tajikistan.", "visual_fact": "Located in Central Asia."}, {"code": "TZ", "num": "834", "name": "Tanzania", "capital": "Dodoma", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/tz.svg", "tier": 193, "mnemonic": "Associate Dodoma directly with Tanzania.", "visual_fact": "Located in Eastern Africa."}, {"code": "TH", "num": "764", "name": "Thailand", "capital": "Bangkok", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/th.svg", "tier": 193, "mnemonic": "Associate Bangkok directly with Thailand.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "TL", "num": "626", "name": "Timor-Leste", "capital": "Dili", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/tl.svg", "tier": 193, "mnemonic": "Associate Dili directly with Timor-Leste.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "TG", "num": "768", "name": "Togo", "capital": "Lom\u00e9", "region": "Africa", "subregion": "Western Africa", "flag": "https://flagcdn.com/tg.svg", "tier": 193, "mnemonic": "Associate Lom\u00e9 directly with Togo.", "visual_fact": "Located in Western Africa."}, {"code": "TK", "num": "772", "name": "Tokelau", "capital": "Fakaofo", "region": "Oceania", "subregion": "Polynesia", "flag": "https://flagcdn.com/tk.svg", "tier": 245, "mnemonic": "Associate Fakaofo directly with Tokelau.", "visual_fact": "Located in Polynesia."}, {"code": "TO", "num": "776", "name": "Tonga", "capital": "Nuku'alofa", "region": "Oceania", "subregion": "Polynesia", "flag": "https://flagcdn.com/to.svg", "tier": 193, "mnemonic": "Associate Nuku'alofa directly with Tonga.", "visual_fact": "Located in Polynesia."}, {"code": "TT", "num": "780", "name": "Trinidad and Tobago", "capital": "Port of Spain", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/tt.svg", "tier": 193, "mnemonic": "Associate Port of Spain directly with Trinidad and Tobago.", "visual_fact": "Located in Caribbean."}, {"code": "TN", "num": "788", "name": "Tunisia", "capital": "Tunis", "region": "Africa", "subregion": "Northern Africa", "flag": "https://flagcdn.com/tn.svg", "tier": 193, "mnemonic": "Associate Tunis directly with Tunisia.", "visual_fact": "Located in Northern Africa."}, {"code": "TM", "num": "795", "name": "Turkmenistan", "capital": "Ashgabat", "region": "Asia", "subregion": "Central Asia", "flag": "https://flagcdn.com/tm.svg", "tier": 193, "mnemonic": "Associate Ashgabat directly with Turkmenistan.", "visual_fact": "Located in Central Asia."}, {"code": "TC", "num": "796", "name": "Turks and Caicos Islands", "capital": "Cockburn Town", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/tc.svg", "tier": 245, "mnemonic": "Associate Cockburn Town directly with Turks and Caicos Islands.", "visual_fact": "Located in Caribbean."}, {"code": "TV", "num": "798", "name": "Tuvalu", "capital": "Funafuti", "region": "Oceania", "subregion": "Polynesia", "flag": "https://flagcdn.com/tv.svg", "tier": 193, "mnemonic": "Associate Funafuti directly with Tuvalu.", "visual_fact": "Located in Polynesia."}, {"code": "TR", "num": "792", "name": "T\u00fcrkiye", "capital": "Ankara", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/tr.svg", "tier": 193, "mnemonic": "Associate Ankara directly with T\u00fcrkiye.", "visual_fact": "Located in Western Asia."}, {"code": "UG", "num": "800", "name": "Uganda", "capital": "Kampala", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/ug.svg", "tier": 193, "mnemonic": "Associate Kampala directly with Uganda.", "visual_fact": "Located in Eastern Africa."}, {"code": "UA", "num": "804", "name": "Ukraine", "capital": "Kyiv", "region": "Europe", "subregion": "Eastern Europe", "flag": "https://flagcdn.com/ua.svg", "tier": 193, "mnemonic": "Associate Kyiv directly with Ukraine.", "visual_fact": "Located in Eastern Europe."}, {"code": "AE", "num": "784", "name": "United Arab Emirates", "capital": "Abu Dhabi", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/ae.svg", "tier": 193, "mnemonic": "Associate Abu Dhabi directly with United Arab Emirates.", "visual_fact": "Located in Western Asia."}, {"code": "GB", "num": "826", "name": "United Kingdom", "capital": "London", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/gb.svg", "tier": 193, "mnemonic": "Associate London directly with United Kingdom.", "visual_fact": "Located in Northern Europe."}, {"code": "US", "num": "840", "name": "United States", "capital": "Washington D.C.", "region": "Americas", "subregion": "North America", "flag": "https://flagcdn.com/us.svg", "tier": 193, "mnemonic": "Associate Washington D.C. directly with United States.", "visual_fact": "Located in North America."}, {"code": "VI", "num": "850", "name": "United States Virgin Islands", "capital": "Charlotte Amalie", "region": "Americas", "subregion": "Caribbean", "flag": "https://flagcdn.com/vi.svg", "tier": 245, "mnemonic": "Associate Charlotte Amalie directly with United States Virgin Islands.", "visual_fact": "Located in Caribbean."}, {"code": "UY", "num": "858", "name": "Uruguay", "capital": "Montevideo", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/uy.svg", "tier": 193, "mnemonic": "Associate Montevideo directly with Uruguay.", "visual_fact": "Located in South America."}, {"code": "UZ", "num": "860", "name": "Uzbekistan", "capital": "Tashkent", "region": "Asia", "subregion": "Central Asia", "flag": "https://flagcdn.com/uz.svg", "tier": 193, "mnemonic": "Associate Tashkent directly with Uzbekistan.", "visual_fact": "Located in Central Asia."}, {"code": "VU", "num": "548", "name": "Vanuatu", "capital": "Port Vila", "region": "Oceania", "subregion": "Melanesia", "flag": "https://flagcdn.com/vu.svg", "tier": 193, "mnemonic": "Associate Port Vila directly with Vanuatu.", "visual_fact": "Located in Melanesia."}, {"code": "VA", "num": "336", "name": "Vatican City", "capital": "Vatican City", "region": "Europe", "subregion": "Southern Europe", "flag": "https://flagcdn.com/va.svg", "tier": 193, "mnemonic": "Associate Vatican City directly with Vatican City.", "visual_fact": "Located in Southern Europe."}, {"code": "VE", "num": "862", "name": "Venezuela", "capital": "Caracas", "region": "Americas", "subregion": "South America", "flag": "https://flagcdn.com/ve.svg", "tier": 193, "mnemonic": "Associate Caracas directly with Venezuela.", "visual_fact": "Located in South America."}, {"code": "VN", "num": "704", "name": "Vietnam", "capital": "Hanoi", "region": "Asia", "subregion": "South-Eastern Asia", "flag": "https://flagcdn.com/vn.svg", "tier": 193, "mnemonic": "Associate Hanoi directly with Vietnam.", "visual_fact": "Located in South-Eastern Asia."}, {"code": "WF", "num": "876", "name": "Wallis and Futuna", "capital": "Mata-Utu", "region": "Oceania", "subregion": "Polynesia", "flag": "https://flagcdn.com/wf.svg", "tier": 245, "mnemonic": "Associate Mata-Utu directly with Wallis and Futuna.", "visual_fact": "Located in Polynesia."}, {"code": "EH", "num": "732", "name": "Western Sahara", "capital": "El Aai\u00fan", "region": "Africa", "subregion": "Northern Africa", "flag": "https://flagcdn.com/eh.svg", "tier": 200, "mnemonic": "Associate El Aai\u00fan directly with Western Sahara.", "visual_fact": "Located in Northern Africa."}, {"code": "YE", "num": "887", "name": "Yemen", "capital": "Sana'a", "region": "Asia", "subregion": "Western Asia", "flag": "https://flagcdn.com/ye.svg", "tier": 193, "mnemonic": "Associate Sana'a directly with Yemen.", "visual_fact": "Located in Western Asia."}, {"code": "ZM", "num": "894", "name": "Zambia", "capital": "Lusaka", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/zm.svg", "tier": 193, "mnemonic": "Associate Lusaka directly with Zambia.", "visual_fact": "Located in Eastern Africa."}, {"code": "ZW", "num": "716", "name": "Zimbabwe", "capital": "Harare", "region": "Africa", "subregion": "Eastern Africa", "flag": "https://flagcdn.com/zw.svg", "tier": 193, "mnemonic": "Associate Harare directly with Zimbabwe.", "visual_fact": "Located in Eastern Africa."}, {"code": "AX", "num": "248", "name": "\u00c5land Islands", "capital": "Mariehamn", "region": "Europe", "subregion": "Northern Europe", "flag": "https://flagcdn.com/ax.svg", "tier": 245, "mnemonic": "Associate Mariehamn directly with \u00c5land Islands.", "visual_fact": "Located in Northern Europe."}];
-let numMap = new Map();
-allCountries.forEach(c => numMap.set(c.num, c));
-
-let selectedTierLimit = 195;
-let filteredCountries = [];
-let memory = JSON.parse(localStorage.getItem('geo_memory') || '{}');
-let currentMode = 'explore';
-let currentQuestion = null;
-let streak = 0, total = 0, correct = 0;
-let svg, g;
-
-function applyScopeFilter() {
-  filteredCountries = allCountries.filter(c => c.tier <= selectedTierLimit);
-  updateStats();
-  updateMapHighlighting();
-}
-
-function onScopeChange(val) {
-  selectedTierLimit = parseInt(val, 10);
-  applyScopeFilter();
-  if (currentMode !== 'explore') nextQuestion();
-}
-
-function saveMemory() {
-  localStorage.setItem('geo_memory', JSON.stringify(memory));
-  updateStats();
-}
-
-function updateStats() {
-  const activeCodes = new Set(filteredCountries.map(c => c.code));
-  const mastered = Object.entries(memory).filter(([code, score]) => activeCodes.has(code) && score >= 3).length;
-  document.getElementById('score-streak').innerText = streak;
-  document.getElementById('score-mastered').innerText = `${mastered}/${filteredCountries.length}`;
-  document.getElementById('score-acc').innerText = total === 0 ? '0%' : Math.round((correct / total) * 100) + '%';
-}
-
-async function initMap() {
-  const container = document.getElementById('map-container');
-  const width = container.clientWidth || window.innerWidth;
-  const height = container.clientHeight || (window.innerHeight * 0.5);
-
-  svg = d3.select("#world-map")
-          .attr("viewBox", [0, 0, width, height]);
-
-  const projection = d3.geoNaturalEarth1()
-                       .scale(width / 5.5)
-                       .translate([width / 2, height / 1.8]);
-
-  const path = d3.geoPath().projection(projection);
-  g = svg.append("g");
-
-  const zoom = d3.zoom()
-                 .scaleExtent([1, 14])
-                 .on("zoom", (e) => g.attr("transform", e.transform));
-  svg.call(zoom);
-
-  try {
-    const world = await d3.json("https://unpkg.com/world-atlas@2.0.2/countries-110m.json");
-    const shapes = topojson.feature(world, world.objects.countries).features;
-
-    g.selectAll("path")
-     .data(shapes)
-     .enter().append("path")
-     .attr("class", "country")
-     .attr("d", path)
-     .attr("id", d => "num-" + parseInt(d.id, 10))
-     .on("click", (e, d) => handleMapSelection(parseInt(d.id, 10)));
-
-    applyScopeFilter();
-  } catch(err) {
-    console.error("Map load error:", err);
-  }
-}
-
-function updateMapHighlighting() {
-  if (!g) return;
-  const activeNums = new Set(filteredCountries.map(c => parseInt(c.num, 10)));
-  g.selectAll("path.country")
-   .classed("dimmed", d => !activeNums.has(parseInt(d.id, 10)));
-}
-
-function handleMapSelection(numId) {
-  const c = numMap.get(String(numId));
-  if (!c || c.tier > selectedTierLimit) return;
-
-  if (currentMode === 'explore') {
-    g.selectAll("path.country").classed("active-target", false);
-    d3.select("#num-" + numId).classed("active-target", true);
-
-    document.getElementById('explore-flag').src = c.flag;
-    document.getElementById('explore-flag').style.display = 'block';
-    document.getElementById('explore-name').innerText = c.name;
-    document.getElementById('explore-capital').innerText = c.capital;
-    document.getElementById('explore-region').innerText = c.subregion;
-    
-    let tierLabel = "UN Member";
-    if (c.tier === 195) tierLabel = "UN Observer";
-    else if (c.tier === 200) tierLabel = "De Facto State";
-    else if (c.tier === 245) tierLabel = "Territory/Dependency";
-    document.getElementById('explore-tier').innerText = tierLabel;
-
-    document.getElementById('explore-mnemonic').innerText = c.mnemonic;
-    document.getElementById('explore-info').style.display = 'block';
-    document.getElementById('explore-mnemonic-box').style.display = 'block';
-  } else if (currentMode === 'map' && currentQuestion) {
-    evaluateAnswer(c.code === currentQuestion.code);
-  }
-}
-
-function switchMode(m) {
-  currentMode = m;
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-
-  g.selectAll("path.country").classed("active-target", false).classed("correct", false).classed("wrong", false);
-
-  if (m === 'explore') {
-    document.getElementById('explore-panel').classList.add('active');
-    document.getElementById('quiz-panel').classList.remove('active');
-  } else {
-    document.getElementById('explore-panel').classList.remove('active');
-    document.getElementById('quiz-panel').classList.add('active');
-    nextQuestion();
-  }
-}
-
-function pickWeightedTarget() {
-  const weights = filteredCountries.map(c => {
-    const score = memory[c.code] || 0;
-    return score <= 0 ? 4 : (score === 1 ? 2 : 1);
-  });
-  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < filteredCountries.length; i++) {
-    r -= weights[i];
-    if (r <= 0) return filteredCountries[i];
-  }
-  return filteredCountries[0];
-}
-
-function nextQuestion() {
-  if (!filteredCountries.length) return;
-  currentQuestion = pickWeightedTarget();
-  document.getElementById('quiz-hint-box').style.display = 'none';
-  document.getElementById('hint-trigger').style.display = 'block';
-  document.getElementById('quiz-flag').style.display = 'none';
-  const optBox = document.getElementById('quiz-options');
-  optBox.innerHTML = '';
-
-  if (currentMode === 'capitals') {
-    document.getElementById('quiz-question').innerText = `What is the capital of ${currentQuestion.name}?`;
-    makeOptions('capital');
-  } else if (currentMode === 'flags') {
-    document.getElementById('quiz-flag').src = currentQuestion.flag;
-    document.getElementById('quiz-flag').style.display = 'block';
-    document.getElementById('quiz-question').innerText = "Which country uses this flag?";
-    makeOptions('name');
-  } else if (currentMode === 'map') {
-    document.getElementById('quiz-question').innerText = `Tap ${currentQuestion.name} directly on the map.`;
-  }
-}
-
-function makeOptions(field) {
-  const opts = [currentQuestion[field]];
-  while (opts.length < Math.min(4, filteredCountries.length)) {
-    const rand = filteredCountries[Math.floor(Math.random() * filteredCountries.length)][field];
-    if (!opts.includes(rand)) opts.push(rand);
-  }
-  opts.sort(() => Math.random() - 0.5).forEach(val => {
-    const btn = document.createElement('button');
-    btn.className = 'opt-btn';
-    btn.innerText = val;
-    btn.onclick = () => evaluateAnswer(val === currentQuestion[field]);
-    document.getElementById('quiz-options').appendChild(btn);
-  });
-}
-
-function revealHint() {
-  document.getElementById('quiz-hint-text').innerText = `${currentQuestion.mnemonic} (${currentQuestion.subregion})`;
-  document.getElementById('quiz-hint-box').style.display = 'block';
-  document.getElementById('hint-trigger').style.display = 'none';
-}
-
-function evaluateAnswer(isCorrect) {
-  total++;
+function evaluateQuizResult(isCorrect, interactionType, targetNum) {
+  totalAnswered++;
   if (isCorrect) {
-    correct++;
+    totalCorrect++;
     streak++;
-    memory[currentQuestion.code] = (memory[currentQuestion.code] || 0) + 1;
+    userMemory[currentQuizTarget.id] = (userMemory[currentQuizTarget.id] || 0) + 1;
   } else {
     streak = 0;
-    memory[currentQuestion.code] = -1;
+    userMemory[currentQuizTarget.id] = -1; // Drop back for repetition
   }
-  saveMemory();
+  
+  localStorage.setItem('geo_trainer_memory', JSON.stringify(userMemory));
+  updateStatsDisplay();
 
-  if (currentMode === 'map') {
-    const targetEl = d3.select("#num-" + parseInt(currentQuestion.num, 10));
-    targetEl.classed(isCorrect ? "correct" : "wrong", true);
+  if (interactionType === 'map' && targetNum) {
+    const poly = d3.select("#poly-" + targetNum);
+    poly.classed(isCorrect ? "correct" : "wrong", true);
     setTimeout(() => {
-      targetEl.classed("correct", false).classed("wrong", false);
-      nextQuestion();
-    }, 800);
+      poly.classed("correct", false).classed("wrong", false);
+      generateNextQuestion();
+    }, 750);
   } else {
-    if (event && event.target && event.target.tagName === 'BUTTON') {
-      event.target.classList.add(isCorrect ? 'correct' : 'wrong');
-    }
-    setTimeout(nextQuestion, 500);
+    setTimeout(generateNextQuestion, 500);
   }
 }
 
+function updateStatsDisplay() {
+  const activeIds = new Set(filteredList.map(c => c.id));
+  const masteredCount = Object.entries(userMemory).filter(([id, score]) => activeIds.has(id) && score >= 3).length;
+
+  document.getElementById('score-streak').innerText = streak;
+  document.getElementById('score-mastered').innerText = `${masteredCount}/${filteredList.length}`;
+  const acc = (totalAnswered === 0) ? 0 : Math.round((totalCorrect / totalAnswered) * 100);
+  document.getElementById('score-accuracy').innerText = `${acc}%`;
+}
+
+/* Window Resize Handler */
 window.addEventListener('resize', () => {
   const container = document.getElementById('map-container');
   if (svg && container) {
@@ -1287,11 +1003,12 @@ window.addEventListener('resize', () => {
   }
 });
 
+/* Bootstrapping */
 window.addEventListener('DOMContentLoaded', () => {
-  setTimeout(initMap, 50);
+  initializeMap();
 });
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
-  setTimeout(initMap, 50);
+  initializeMap();
 }
 </script>
 </body>
