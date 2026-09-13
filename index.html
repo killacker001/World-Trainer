@@ -3,38 +3,391 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>World Geo Trainer</title>
+<title>GeoTrainer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://d3js.org/d3.v7.min.js"></script>
-<script src="https://unpkg.com/topojson-client@3"></script>
 <style>
   :root {
     --bg: #07090e;
-    --surface: rgba(18, 24, 38, 0.75);
-    --surface-card: rgba(26, 35, 54, 0.7);
+    --surface: #101623;
+    --surface-card: #182236;
     --border: rgba(255, 255, 255, 0.08);
-    --border-highlight: rgba(56, 189, 248, 0.3);
+    --border-active: rgba(56, 189, 248, 0.4);
     --accent: #38bdf8;
     --accent-glow: rgba(56, 189, 248, 0.25);
     --success: #10b981;
-    --success-glow: rgba(16, 185, 129, 0.3);
-    --danger: #f43f5e;
-    --danger-glow: rgba(244, 63, 94, 0.3);
+    --danger: #ef4444;
     --text: #f8fafc;
     --text-muted: #94a3b8;
-    --country-fill: #1a2336;
-    --country-stroke: #090d16;
+    --land: #202b42;
+    --stroke: #090d16;
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-tap-highlight-color: transparent; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
   body { background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
 
-  header { background: var(--surface); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; z-index: 20; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; z-index: 30; }
   .top-bar { display: flex; justify-content: space-between; align-items: center; }
-  .logo { font-size: 1rem; font-weight: 800; letter-spacing: -0.02em; display: flex; align-items: center; gap: 6px; }
-  .logo-badge { background: linear-gradient(135deg, #0284c7, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .logo { font-size: 0.95rem; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 6px; }
+  .logo span { color: var(--accent); }
+  
+  .scope-select { background: #080c14; color: var(--accent); border: 1px solid var(--border); padding: 4px 8px; border-radius: 14px; font-size: 0.72rem; font-weight: 700; outline: none; }
+
+  .nav-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 16px; cursor: pointer; font-size: 0.74rem; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+  .tab-btn.active { background: var(--accent); color: #020617; border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+
+  main { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  
+  /* Map Viewport */
+  #map-wrap { flex: 1; position: relative; background: #06080e; overflow: hidden; width: 100%; height: 100%; touch-action: pan-x pan-y pinch-zoom; }
+  #map-svg { width: 100%; height: 100%; display: block; }
+  
+  .land-path { fill: var(--land); stroke: var(--stroke); stroke-width: 0.7px; cursor: pointer; transition: fill 0.15s, opacity 0.2s; }
+  .land-path:hover, .land-path:active { fill: #0284c7; }
+  .land-path.dimmed { opacity: 0.2; pointer-events: none; }
+  .land-path.active-target { fill: #f59e0b !important; }
+  .land-path.correct { fill: var(--success) !important; }
+  .land-path.wrong { fill: var(--danger) !important; }
+
+  #map-floating-alert { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(16, 22, 35, 0.95); border: 1px solid var(--border-active); padding: 7px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; color: #fff; display: none; z-index: 20; pointer-events: none; text-align: center; white-space: nowrap; box-shadow: 0 4px 18px rgba(0,0,0,0.6); }
+
+  /* Sidebar Bottom Panel */
+  #panel-wrap { width: 350px; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; padding: 12px; gap: 10px; flex-shrink: 0; }
+  .mode-panel { display: none; flex-direction: column; gap: 10px; }
+  .mode-panel.active { display: flex; }
+
+  /* Flag Display */
+  .flag-box { width: 100%; height: 110px; background: #080c14; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; justify-content: center; padding: 8px; }
+  .flag-box img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; box-shadow: 0 3px 10px rgba(0,0,0,0.5); }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat-box { background: var(--surface-card); border: 1px solid var(--border); border-radius: 8px; padding: 6px; text-align: center; }
+  .stat-val { font-size: 1.05rem; font-weight: 800; color: var(--accent); }
+  .stat-lbl { font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+
+  .data-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; font-size: 0.8rem; }
+  .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .row:last-child { border-bottom: none; }
+  .row-label { color: var(--text-muted); }
+  .row-val { font-weight: 700; color: #fff; }
+
+  .anchor-card { background: #171536; border: 1px solid #4338ca; border-radius: 8px; padding: 8px 10px; font-size: 0.78rem; color: #c7d2fe; display: none; line-height: 1.4; }
+  .hint-button { background: transparent; border: 1px dashed var(--accent); color: var(--accent); padding: 7px; border-radius: 8px; cursor: pointer; font-size: 0.76rem; font-weight: 700; text-align: center; }
+
+  .options-box { display: flex; flex-direction: column; gap: 6px; }
+  .choice-btn { background: var(--surface-card); border: 1px solid var(--border); color: var(--text); padding: 10px 12px; border-radius: 8px; cursor: pointer; text-align: left; font-size: 0.82rem; font-weight: 600; }
+  .choice-btn.correct { background: var(--success) !important; color: #fff; }
+  .choice-btn.wrong { background: var(--danger) !important; color: #fff; }
+
+  @media (max-width: 800px) {
+    main { flex-direction: column; }
+    #map-wrap { height: 48%; min-height: 48%; }
+    #panel-wrap { width: 100%; height: 52%; border-left: none; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="top-bar">
+    <div class="logo">🌍 <span>GeoTrainer</span></div>
+    <select id="scope-select" class="scope-select" onchange="changeScope(this.value)">
+      <option value="193">193: UN Members</option>
+      <option value="195" selected>195: Sovereign</option>
+      <option value="200">200: De Facto</option>
+      <option value="245">All Entities</option>
+    </select>
+  </div>
+  <nav class="nav-tabs">
+    <button id="tab-explore" class="tab-btn active" onclick="setMode('explore')">🧭 Explore</button>
+    <button id="tab-capitals" class="tab-btn" onclick="setMode('capitals')">🏛️ Capitals</button>
+    <button id="tab-flags" class="tab-btn" onclick="setMode('flags')">🏳️ Flags</button>
+    <button id="tab-map" class="tab-btn" onclick="setMode('map')">🗺️ Find on Map</button>
+  </nav>
+</header>
+
+<main>
+  <div id="map-wrap">
+    <div id="map-floating-alert">Locate country</div>
+    <svg id="map-svg" viewBox="0 0 1000 500">
+      <g id="map-g"></g>
+    </svg>
+  </div>
+
+  <aside id="panel-wrap">
+    <!-- Explore Mode -->
+    <div id="panel-explore" class="mode-panel active">
+      <div id="explore-flag-wrap" class="flag-box" style="display:none;">
+        <img id="explore-flag-img" alt="Flag" />
+      </div>
+      <div id="explore-data" class="data-card" style="display:none;">
+        <div class="row"><span class="row-label">Country</span><span class="row-val" id="exp-name">-</span></div>
+        <div class="row"><span class="row-label">Capital</span><span class="row-val" id="exp-cap">-</span></div>
+        <div class="row"><span class="row-label">Region</span><span class="row-val" id="exp-reg">-</span></div>
+        <div class="row"><span class="row-label">Status</span><span class="row-val" id="exp-tier">-</span></div>
+      </div>
+      <div id="explore-hint-card" class="anchor-card">
+        <span id="exp-mnemonic">-</span>
+      </div>
+      <div id="explore-placeholder" style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 20px 10px;">
+        Tap any country on the globe to reveal its capital, flag, and region.
+      </div>
+    </div>
+
+    <!-- Quiz Mode -->
+    <div id="panel-quiz" class="mode-panel">
+      <div class="stat-grid">
+        <div class="stat-box"><div class="stat-val" id="stat-streak">0</div><div class="stat-lbl">Streak</div></div>
+        <div class="stat-box"><div class="stat-val" id="stat-mastered">0</div><div class="stat-lbl">Mastered</div></div>
+        <div class="stat-box"><div class="stat-val" id="stat-acc">0%</div><div class="stat-lbl">Accuracy</div></div>
+      </div>
+
+      <div id="quiz-flag-box" class="flag-box" style="display:none;">
+        <img id="quiz-flag-img" alt="Quiz Flag" />
+      </div>
+
+      <div id="quiz-question-txt" style="font-size: 0.92rem; font-weight: 700; text-align: center; min-height: 32px; display: flex; align-items: center; justify-content: center;">-</div>
+      <div id="quiz-choices" class="options-box"></div>
+
+      <button id="hint-btn" class="hint-button" onclick="showHint()">💡 Need a Hint?</button>
+      <div id="quiz-hint-card" class="anchor-card">
+        <span id="quiz-hint-txt">-</span>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>
+// Standalone offline dataset with embedded simplified vector map definitions
+const DB = [
+  {"id":"US","tier":193,"name":"United States","capital":"Washington, D.C.","reg":"Americas","path":"M 150 140 L 290 140 L 280 200 L 170 205 Z M 90 90 L 145 90 L 140 120 L 95 120 Z"},
+  {"id":"CA","tier":193,"name":"Canada","capital":"Ottawa","reg":"Americas","path":"M 140 70 L 290 65 L 290 135 L 145 135 Z"},
+  {"id":"MX","tier":193,"name":"Mexico","capital":"Mexico City","reg":"Americas","path":"M 160 208 L 220 208 L 235 255 L 195 250 Z"},
+  {"id":"BR","tier":193,"name":"Brazil","capital":"Brasília","reg":"Americas","path":"M 285 270 L 365 275 L 340 360 L 280 325 Z"},
+  {"id":"AR","tier":193,"name":"Argentina","capital":"Buenos Aires","reg":"Americas","path":"M 275 350 L 310 350 L 290 440 L 270 440 Z"},
+  {"id":"CL","tier":193,"name":"Chile","capital":"Santiago","reg":"Americas","path":"M 265 345 L 274 345 L 268 440 L 260 440 Z"},
+  {"id":"CO","tier":193,"name":"Colombia","capital":"Bogotá","reg":"Americas","path":"M 230 255 L 270 255 L 270 285 L 240 285 Z"},
+  {"id":"PE","tier":193,"name":"Peru","capital":"Lima","reg":"Americas","path":"M 235 288 L 268 288 L 275 340 L 245 320 Z"},
+  {"id":"GB","tier":193,"name":"United Kingdom","capital":"London","reg":"Europe","path":"M 460 110 L 475 110 L 475 135 L 460 135 Z"},
+  {"id":"FR","tier":193,"name":"France","capital":"Paris","reg":"Europe","path":"M 470 140 L 500 140 L 495 170 L 465 170 Z"},
+  {"id":"DE","tier":193,"name":"Germany","capital":"Berlin","reg":"Europe","path":"M 502 130 L 528 130 L 525 158 L 500 158 Z"},
+  {"id":"IT","tier":193,"name":"Italy","capital":"Rome","reg":"Europe","path":"M 508 165 L 524 165 L 536 200 L 520 200 Z"},
+  {"id":"ES","tier":193,"name":"Spain","capital":"Madrid","reg":"Europe","path":"M 445 170 L 478 170 L 470 205 L 440 200 Z"},
+  {"id":"RU","tier":193,"name":"Russia","capital":"Moscow","reg":"Europe","path":"M 540 60 L 880 70 L 850 145 L 540 135 Z"},
+  {"id":"UA","tier":193,"name":"Ukraine","capital":"Kyiv","reg":"Europe","path":"M 545 138 L 595 138 L 590 168 L 540 165 Z"},
+  {"id":"EG","tier":193,"name":"Egypt","capital":"Cairo","reg":"Africa","path":"M 550 208 L 595 208 L 595 245 L 550 245 Z"},
+  {"id":"ZA","tier":193,"name":"South Africa","capital":"Pretoria","reg":"Africa","path":"M 530 380 L 585 380 L 575 430 L 530 425 Z"},
+  {"id":"NG","tier":193,"name":"Nigeria","capital":"Abuja","reg":"Africa","path":"M 480 250 L 515 250 L 515 285 L 480 280 Z"},
+  {"id":"KE","tier":193,"name":"Kenya","capital":"Nairobi","reg":"Africa","path":"M 585 278 L 615 278 L 610 315 L 580 310 Z"},
+  {"id":"SA","tier":193,"name":"Saudi Arabia","capital":"Riyadh","reg":"Asia","path":"M 598 215 L 650 220 L 640 268 L 595 260 Z"},
+  {"id":"IN","tier":193,"name":"India","capital":"New Delhi","reg":"Asia","path":"M 680 205 L 735 205 L 720 280 L 685 255 Z"},
+  {"id":"CN","tier":193,"name":"China","capital":"Beijing","reg":"Asia","path":"M 705 145 L 820 145 L 805 235 L 720 230 Z"},
+  {"id":"JP","tier":193,"name":"Japan","capital":"Tokyo","reg":"Asia","path":"M 845 160 L 865 160 L 855 205 L 838 200 Z"},
+  {"id":"KR","tier":193,"name":"South Korea","capital":"Seoul","reg":"Asia","path":"M 810 180 L 826 180 L 824 198 L 810 198 Z"},
+  {"id":"ID","tier":193,"name":"Indonesia","capital":"Jakarta","reg":"Asia","path":"M 740 300 L 840 300 L 835 325 L 740 325 Z"},
+  {"id":"AU","tier":193,"name":"Australia","capital":"Canberra","reg":"Oceania","path":"M 780 350 L 885 350 L 870 435 L 775 425 Z"},
+  {"id":"NZ","tier":193,"name":"New Zealand","capital":"Wellington","reg":"Oceania","path":"M 900 420 L 920 420 L 910 455 L 895 450 Z"},
+  {"id":"VA","tier":195,"name":"Vatican City","capital":"Vatican City","reg":"Europe","path":"M 515 178 L 519 178 L 519 182 L 515 182 Z"},
+  {"id":"PS","tier":195,"name":"Palestine","capital":"Ramallah","reg":"Asia","path":"M 587 212 L 591 212 L 591 216 L 587 216 Z"},
+  {"id":"TW","tier":200,"name":"Taiwan","capital":"Taipei","reg":"Asia","path":"M 815 236 L 825 236 L 823 250 L 814 250 Z"},
+  {"id":"GL","tier":245,"name":"Greenland","capital":"Nuuk","reg":"Americas","path":"M 340 35 L 430 35 L 400 85 L 340 75 Z"}
+];
+
+// Add runtime properties
+const countries = DB.map(c => ({
+  ...c,
+  flag: `https://flagcdn.com/${c.id.toLowerCase()}.svg`,
+  mnemonic: `Anchor: Remember ${c.capital} is the capital of ${c.name} (${c.reg}).`
+}));
+
+let activeTier = 195;
+let filtered = [];
+let memory = JSON.parse(localStorage.getItem('geo_mem_v4') || '{}');
+let mode = 'explore';
+let currentQ = null;
+let streak = 0, total = 0, correct = 0;
+
+function init() {
+  renderMap();
+  changeScope(195);
+  updateStats();
+}
+
+function renderMap() {
+  const g = document.getElementById('map-g');
+  g.innerHTML = '';
+  countries.forEach(c => {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", c.path);
+    path.setAttribute("class", "land-path");
+    path.setAttribute("id", "land-" + c.id);
+    path.addEventListener("click", () => handleLandClick(c));
+    g.appendChild(path);
+  });
+}
+
+function changeScope(val) {
+  activeTier = parseInt(val, 10);
+  filtered = countries.filter(c => c.tier <= activeTier);
+  
+  countries.forEach(c => {
+    const el = document.getElementById("land-" + c.id);
+    if (el) {
+      if (c.tier <= activeTier) {
+        el.classList.remove("dimmed");
+      } else {
+        el.classList.add("dimmed");
+      }
+    }
+  });
+
+  updateStats();
+  if (mode !== 'explore') nextQuestion();
+}
+
+function handleLandClick(c) {
+  if (c.tier > activeTier) return;
+
+  if (mode === 'explore') {
+    document.querySelectorAll('.land-path').forEach(p => p.classList.remove('active-target'));
+    const el = document.getElementById("land-" + c.id);
+    if (el) el.classList.add('active-target');
+
+    document.getElementById('explore-placeholder').style.display = 'none';
+    document.getElementById('explore-flag-wrap').style.display = 'flex';
+    document.getElementById('explore-flag-img').src = c.flag;
+    document.getElementById('explore-data').style.display = 'block';
+    document.getElementById('exp-name').innerText = c.name;
+    document.getElementById('exp-cap').innerText = c.capital;
+    document.getElementById('exp-reg').innerText = c.reg;
+    document.getElementById('exp-tier').innerText = c.tier === 193 ? "UN Member" : (c.tier === 195 ? "Observer" : "Territory");
+    document.getElementById('explore-hint-card').style.display = 'block';
+    document.getElementById('exp-mnemonic').innerText = c.mnemonic;
+  } else if (mode === 'map' && currentQ) {
+    checkAnswer(c.id === currentQ.id);
+  }
+}
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + m).classList.add('active');
+
+  document.querySelectorAll('.land-path').forEach(p => {
+    p.classList.remove('active-target', 'correct', 'wrong');
+  });
+
+  const banner = document.getElementById('map-floating-alert');
+  banner.style.display = (m === 'map') ? 'block' : 'none';
+
+  if (m === 'explore') {
+    document.getElementById('panel-explore').classList.add('active');
+    document.getElementById('panel-quiz').classList.remove('active');
+  } else {
+    document.getElementById('panel-explore').classList.remove('active');
+    document.getElementById('panel-quiz').classList.add('active');
+    nextQuestion();
+  }
+}
+
+function nextQuestion() {
+  if (!filtered.length) return;
+  
+  // Leitner weight
+  const pool = [];
+  filtered.forEach(c => {
+    const score = memory[c.id] || 0;
+    const count = score <= 0 ? 3 : (score === 1 ? 2 : 1);
+    for (let i = 0; i < count; i++) pool.push(c);
+  });
+  currentQ = pool[Math.floor(Math.random() * pool.length)];
+
+  document.getElementById('quiz-hint-card').style.display = 'none';
+  document.getElementById('hint-btn').style.display = 'block';
+  document.getElementById('quiz-flag-box').style.display = 'none';
+  const choicesBox = document.getElementById('quiz-choices');
+  choicesBox.innerHTML = '';
+
+  const qTxt = document.getElementById('quiz-question-txt');
+  const banner = document.getElementById('map-floating-alert');
+
+  if (mode === 'capitals') {
+    banner.style.display = 'none';
+    qTxt.innerText = `What is the capital of ${currentQ.name}?`;
+    renderChoices('capital');
+  } else if (mode === 'flags') {
+    banner.style.display = 'none';
+    document.getElementById('quiz-flag-img').src = currentQ.flag;
+    document.getElementById('quiz-flag-box').style.display = 'flex';
+    qTxt.innerText = "Which country uses this flag?";
+    renderChoices('name');
+  } else if (mode === 'map') {
+    banner.style.display = 'block';
+    banner.innerHTML = `Tap <b>${currentQ.name}</b> on the map`;
+    qTxt.innerText = `Locate ${currentQ.name}`;
+    choicesBox.innerHTML = `<div style="text-align:center; color:var(--text-muted); font-size:0.8rem; padding:10px;">Select the highlighted country directly on the map above.</div>`;
+  }
+}
+
+function renderChoices(field) {
+  const opts = [currentQ[field]];
+  while (opts.length < Math.min(4, filtered.length)) {
+    const r = filtered[Math.floor(Math.random() * filtered.length)][field];
+    if (!opts.includes(r)) opts.push(r);
+  }
+  opts.sort(() => Math.random() - 0.5).forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.innerText = choice;
+    btn.onclick = (e) => {
+      const isRight = (choice === currentQ[field]);
+      btn.classList.add(isRight ? 'correct' : 'wrong');
+      checkAnswer(isRight);
+    };
+    document.getElementById('quiz-choices').appendChild(btn);
+  });
+}
+
+function showHint() {
+  document.getElementById('quiz-hint-txt').innerText = currentQ.mnemonic;
+  document.getElementById('quiz-hint-card').style.display = 'block';
+  document.getElementById('hint-btn').style.display = 'none';
+}
+
+function checkAnswer(isRight) {
+  total++;
+  if (isRight) {
+    correct++;
+    streak++;
+    memory[currentQ.id] = (memory[currentQ.id] || 0) + 1;
+  } else {
+    streak = 0;
+    memory[currentQ.id] = -1;
+  }
+  localStorage.setItem('geo_mem_v4', JSON.stringify(memory));
+  updateStats();
+
+  if (mode === 'map') {
+    const el = document.getElementById("land-" + currentQ.id);
+    if (el) el.classList.add(isRight ? 'correct' : 'wrong');
+    setTimeout(() => {
+      if (el) el.classList.remove('correct', 'wrong');
+      nextQuestion();
+    }, 700);
+  } else {
+    setTimeout(nextQuestion, 500);
+  }
+}
+
+function updateStats() {
+  const activeIds = new Set(filtered.map(c => c.id));
+  const mastered = Object.entries(memory).filter(([id, s]) => activeIds.has(id) && s >= 3).length;
+  document.getElementById('stat-streak').innerText = streak;
+  document.getElementById('stat-mastered').innerText = `${mastered}/${filtered.length}`;
+  document.getElementById('stat-acc').innerText = total === 0 ? '0%' : Ma  .logo-badge { background: linear-gradient(135deg, #0284c7, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
   
   .scope-select { background: rgba(0, 0, 0, 0.35); color: var(--accent); border: 1px solid var(--border); padding: 5px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; outline: none; }
 
